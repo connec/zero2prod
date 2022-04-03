@@ -44,4 +44,4 @@ sqlx migrate run >&2
 
 echo >&2 "Container $container_name is up and running!"
 
-echo "DATABASE_URL=$DATABASE_URL"
+echo "DATABASE_URL=$DATABASE_URL" | tee .env
