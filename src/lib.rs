@@ -1,4 +1,8 @@
+mod config;
 mod routes;
 mod server;
 
-pub use server::{bind, Result, Server};
+pub use self::{
+    config::Config,
+    server::{bind, Result, Server},
+};
