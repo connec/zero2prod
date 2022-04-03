@@ -1,6 +1,6 @@
 use axum::extract::Form;
-use chrono::Utc;
 use hyper::StatusCode;
+use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::Tx;
@@ -20,7 +20,7 @@ pub(crate) async fn subscribe(mut tx: Tx, Form(form): Form<Subscriber>) -> Statu
         Uuid::new_v4(),
         form.email,
         form.name,
-        Utc::now(),
+        OffsetDateTime::now_utc(),
     )
     .execute(&mut tx)
     .await
