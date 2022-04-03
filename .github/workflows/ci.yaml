@@ -4,6 +4,8 @@ on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
+  SQLX_VERSION: 0.5.11
+  SQLX_FEATURES: '["postgres", "sqlx/runtime-tokio-rustls"]'
 
 jobs:
   test:
@@ -15,6 +17,26 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+      - name: Cache sqlx-cli
+        uses: actions/cache@v2
+        id: cache-sqlx
+        with:
+          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}
+          path: ~/.cargo/bin/sqlx
+      - name: Install sqlx-cli
+        if: steps.cache-sqlx.outputs.cache-hit == false
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: >
+            sqlx-cli
+            --force
+            --version=${{ env.SQLX_VERSION }}
+            --features=${{ join(fromJSON(env.SQLX_FEATURES), ',') }}
+            --no-default-features
+            --locked
+      - name: Start database
+        run: ./scripts/init_db.sh >> $GITHUB_ENV
       - uses: actions-rs/cargo@v1
         with:
           command: test
@@ -44,6 +66,26 @@ jobs:
           profile: minimal
           override: true
           components: clippy
+      - name: Cache sqlx-cli
+        uses: actions/cache@v2
+        id: cache-sqlx
+        with:
+          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}
+          path: ~/.cargo/bin/sqlx
+      - name: Install sqlx-cli
+        if: steps.cache-sqlx.outputs.cache-hit == false
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: >
+            sqlx-cli
+            --force
+            --version=${{ env.SQLX_VERSION }}
+            --features=${{ join(fromJSON(env.SQLX_FEATURES), ',') }}
+            --no-default-features
+            --locked
+      - name: Start database
+        run: ./scripts/init_db.sh >> $GITHUB_ENV
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -62,6 +104,26 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+      - name: Cache sqlx-cli
+        uses: actions/cache@v2
+        id: cache-sqlx
+        with:
+          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}
+          path: ~/.cargo/bin/sqlx
+      - name: Install sqlx-cli
+        if: steps.cache-sqlx.outputs.cache-hit == false
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: >
+            sqlx-cli
+            --force
+            --version=${{ env.SQLX_VERSION }}
+            --features=${{ join(fromJSON(env.SQLX_FEATURES), ',') }}
+            --no-default-features
+            --locked
+      - name: Start database
+        run: ./scripts/init_db.sh >> $GITHUB_ENV
       - uses: actions-rs/tarpaulin@v0.1
         with:
           args: --ignore-tests
