@@ -1,9 +1,8 @@
 use axum::extract::Form;
-use hyper::StatusCode;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::Tx;
+use crate::{Error, Tx};
 
 #[derive(serde::Deserialize)]
 pub(crate) struct Subscriber {
@@ -11,8 +10,8 @@ pub(crate) struct Subscriber {
     email: String,
 }
 
-pub(crate) async fn subscribe(mut tx: Tx, Form(form): Form<Subscriber>) -> StatusCode {
-    match sqlx::query!(
+pub(crate) async fn subscribe(mut tx: Tx, Form(form): Form<Subscriber>) -> Result<(), Error> {
+    sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
         VALUES ($1, $2, $3, $4)
@@ -23,12 +22,6 @@ pub(crate) async fn subscribe(mut tx: Tx, Form(form): Form<Subscriber>) -> Statu
         OffsetDateTime::now_utc(),
     )
     .execute(&mut tx)
-    .await
-    {
-        Ok(_) => StatusCode::OK,
-        Err(error) => {
-            eprintln!("Failed to execute query: {}", error);
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
-    }
+    .await?;
+    Ok(())
 }
