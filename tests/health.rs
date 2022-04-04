@@ -1,6 +1,6 @@
 use std::net::{Ipv4Addr, SocketAddr};
 
-use sqlx::{postgres::PgConnectOptions, Connection, Executor, PgConnection, PgPool};
+use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::Config;
 
@@ -88,7 +88,7 @@ async fn spawn_app() -> TestApp {
     });
 
     let config = Config::from_env().expect("failed to load configuration");
-    let pool = prepare_db(config.database).await;
+    let pool = prepare_db(&config).await;
 
     let server = zero2prod::bind(pool.clone(), &(Ipv4Addr::LOCALHOST, 0).into());
     let addr = server.local_addr();
@@ -98,20 +98,19 @@ async fn spawn_app() -> TestApp {
     TestApp { pool, addr }
 }
 
-async fn prepare_db(base_config: PgConnectOptions) -> PgPool {
-    let postgres_config = base_config.database("postgres");
-    let mut connection = PgConnection::connect_with(&postgres_config)
-        .await
-        .expect("failed to connect to `postgres` database");
+async fn prepare_db(config: &Config) -> PgPool {
+    let mut connection =
+        PgConnection::connect_with(&config.database_options_with_database("postgres"))
+            .await
+            .expect("failed to connect to `postgres` database");
 
-    let database = Uuid::new_v4();
+    let database = Uuid::new_v4().to_string();
     connection
         .execute(format!(r#"CREATE DATABASE "{}""#, database).as_str())
         .await
         .expect("failed to create database");
 
-    let test_config = postgres_config.database(database.to_string().as_str());
-    let pool = PgPool::connect_with(test_config)
+    let pool = PgPool::connect_with(config.database_options_with_database(&database))
         .await
         .expect("failed to connect to test database");
     sqlx::migrate!("./migrations")

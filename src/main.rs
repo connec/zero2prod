@@ -1,13 +1,7 @@
-use std::{
-    net::{IpAddr, Ipv4Addr},
-    time::Duration,
-};
+use std::time::Duration;
 
 use sqlx::postgres::PgPoolOptions;
 use tracing::info;
-
-const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-const DEFAULT_PORT: u16 = 8000;
 
 #[tokio::main]
 async fn main() -> zero2prod::ServerResult {
@@ -17,16 +11,9 @@ async fn main() -> zero2prod::ServerResult {
 
     let pool = PgPoolOptions::new()
         .connect_timeout(Duration::from_secs(2))
-        .connect_lazy_with(config.database);
+        .connect_lazy_with(config.database_options());
 
-    let server = zero2prod::bind(
-        pool,
-        &(
-            config.address.unwrap_or(DEFAULT_ADDRESS),
-            config.port.unwrap_or(DEFAULT_PORT),
-        )
-            .into(),
-    );
+    let server = zero2prod::bind(pool, &config.addr());
 
     info!("Listening on {}", server.local_addr());
 
