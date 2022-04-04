@@ -70,8 +70,10 @@ jobs:
         uses: actions/cache@v2
         id: cache-sqlx
         with:
-          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}
-          path: ~/.cargo/bin/sqlx
+          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}-v1
+          path: |
+            ~/.cargo/bin/cargo-sqlx
+            ~/.cargo/bin/sqlx
       - name: Install sqlx-cli
         if: steps.cache-sqlx.outputs.cache-hit == false
         uses: actions-rs/cargo@v1
