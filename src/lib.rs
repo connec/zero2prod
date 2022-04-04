@@ -1,7 +1,7 @@
 mod config;
-mod request_tracing;
 mod routes;
 mod server;
+pub mod telemetry;
 
 use std::fmt;
 
