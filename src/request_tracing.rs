@@ -1,6 +1,8 @@
-use std::time::Duration;
+use std::{convert::Infallible, fmt, marker::PhantomData, task, time::Duration};
 
 use axum::{body::Body, http::Request, response::Response};
+use futures::future::BoxFuture;
+use tower::{Layer, Service};
 use tower_http::{
     classify::{
         ClassifiedResponse, ClassifyResponse, NeverClassifyEos, ServerErrorsAsFailures,
@@ -13,7 +15,68 @@ use uuid::Uuid;
 
 use crate::Error;
 
-pub(crate) fn layer() -> TraceLayer<
+#[derive(Clone)]
+pub(crate) struct Id(Uuid);
+
+impl fmt::Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+pub(crate) struct IdLayer<S>(PhantomData<S>);
+
+impl<S> Layer<S> for IdLayer<S> {
+    type Service = IdMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        IdMiddleware {
+            id: Id(Uuid::new_v4()),
+            inner,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct IdMiddleware<S> {
+    id: Id,
+    inner: S,
+}
+
+impl<S, ReqBody, ResBody> Service<Request<ReqBody>> for IdMiddleware<S>
+where
+    S: Service<Request<ReqBody>, Response = Response<ResBody>, Error = Infallible>,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(&mut self, cx: &mut task::Context<'_>) -> task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
+        req.extensions_mut().insert(self.id.clone());
+
+        let id = self.id.clone();
+        let res = self.inner.call(req);
+
+        Box::pin(async move {
+            let mut res = res.await?;
+            res.headers_mut()
+                // we unwrap the parsed header value because we know UUIDs will be valid
+                .insert("request-id", id.to_string().parse().unwrap());
+            Ok(res)
+        })
+    }
+}
+
+pub(crate) fn id_layer<S>() -> IdLayer<S> {
+    IdLayer(PhantomData)
+}
+
+pub(crate) fn trace_layer() -> TraceLayer<
     SharedClassifier<Classifier>,
     impl (FnMut(&Request<Body>) -> Span) + Clone,
     impl FnMut(&Request<Body>, &Span) + Clone,
@@ -24,7 +87,11 @@ pub(crate) fn layer() -> TraceLayer<
 > {
     TraceLayer::new(SharedClassifier::new(Classifier::default()))
         .make_span_with(|request: &Request<Body>| {
-            let id = Uuid::new_v4();
+            let id = request
+                .extensions()
+                .get()
+                .cloned()
+                .unwrap_or(Id(Uuid::nil()));
             tracing::debug_span!(
                 "request",
                 %id,

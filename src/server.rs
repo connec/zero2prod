@@ -20,7 +20,8 @@ pub fn bind(pool: PgPool, addr: &SocketAddr) -> Server {
         .route("/subscriptions", post(routes::subscribe))
         .layer(
             ServiceBuilder::new()
-                .layer(request_tracing::layer())
+                .layer(request_tracing::id_layer())
+                .layer(request_tracing::trace_layer())
                 .layer(axum_sqlx_tx::Layer::new_with_error::<Error>(pool)),
         );
 
