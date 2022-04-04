@@ -9,6 +9,7 @@ use tower_http::{
     trace::{DefaultOnBodyChunk, DefaultOnEos, TraceLayer},
 };
 use tracing::Span;
+use uuid::Uuid;
 
 use crate::Error;
 
@@ -23,8 +24,10 @@ pub(crate) fn layer() -> TraceLayer<
 > {
     TraceLayer::new(SharedClassifier::new(Classifier::default()))
         .make_span_with(|request: &Request<Body>| {
+            let id = Uuid::new_v4();
             tracing::debug_span!(
                 "request",
+                %id,
                 method = %request.method(),
                 uri = %request.uri(),
                 version = ?request.version(),
