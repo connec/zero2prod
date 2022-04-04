@@ -86,6 +86,8 @@ jobs:
             --locked
       - name: Start database
         run: ./scripts/init_db.sh >> $GITHUB_ENV
+      - name: Check schema sync
+        run: cargo sqlx prepare --check -- --lib
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
