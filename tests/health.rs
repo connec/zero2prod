@@ -71,12 +71,22 @@ got: {:?}",
     }
 }
 
+static TRACING_ENABLED: std::sync::Once = std::sync::Once::new();
+
 struct TestApp {
     pool: PgPool,
     addr: SocketAddr,
 }
 
 async fn spawn_app() -> TestApp {
+    TRACING_ENABLED.call_once(|| {
+        if std::env::var("TEST_LOG").is_ok() {
+            zero2prod::telemetry::init("test", std::io::stdout);
+        } else {
+            zero2prod::telemetry::init("test", std::io::sink);
+        }
+    });
+
     let config = Config::from_env().expect("failed to load configuration");
     let pool = prepare_db(config.database).await;
 
