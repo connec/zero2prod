@@ -5,19 +5,24 @@ use axum::{
     Router,
 };
 use sqlx::PgPool;
+use tower::ServiceBuilder;
 
-use crate::routes;
+use crate::{request_tracing, routes, Error};
 
 pub type Server =
     axum::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<Router>>;
 
-pub type Result = hyper::Result<()>;
+pub type ServerResult = hyper::Result<()>;
 
 pub fn bind(pool: PgPool, addr: &SocketAddr) -> Server {
     let app = Router::new()
         .route("/health", get(routes::health))
         .route("/subscriptions", post(routes::subscribe))
-        .layer(axum_sqlx_tx::Layer::new(pool));
+        .layer(
+            ServiceBuilder::new()
+                .layer(request_tracing::layer())
+                .layer(axum_sqlx_tx::Layer::new_with_error::<Error>(pool)),
+        );
 
     axum::Server::bind(addr).serve(app.into_make_service())
 }
