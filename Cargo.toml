@@ -9,6 +9,7 @@ edition = "2021"
 axum = "0.5.0"
 axum-sqlx-tx = { version = "0.3.0", features = ["postgres"] }
 envy = "0.4.2"
+futures = "0.3.21"
 hyper = "0.14.18"
 serde = { version = "1.0.136", features = ["derive"] }
 sqlx = { version = "0.5.11", features = ["macros", "migrate", "postgres", "runtime-tokio-rustls", "time", "uuid"], default-features = false }
