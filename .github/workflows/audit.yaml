@@ -1,14 +1,20 @@
 name: Audit
-on:
-  push:
-    paths:
-      - '**/Cargo.lock'
-      - '**/Cargo.toml'
+
+on: pull_request
+
 jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
+      - name: Check if dependencies changed
+        id: changes
+        uses: tj-actions/verify-changed-files@v9
+        with:
+          files: |
+            **/Cargo.lock
+            **/Cargo.toml
       - uses: actions-rs/audit-check@v1
+        if: steps.changes.outputs.files_changed == 'true'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
