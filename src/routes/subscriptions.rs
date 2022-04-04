@@ -10,6 +10,7 @@ pub(crate) struct Subscriber {
     email: String,
 }
 
+#[tracing::instrument(skip(tx, form))]
 pub(crate) async fn subscribe(mut tx: Tx, Form(form): Form<Subscriber>) -> Result<(), Error> {
     sqlx::query!(
         r#"
