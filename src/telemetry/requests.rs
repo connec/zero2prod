@@ -18,6 +18,12 @@ use crate::Error;
 #[derive(Clone)]
 pub(crate) struct Id(Uuid);
 
+impl Default for Id {
+    fn default() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
 impl fmt::Display for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -30,16 +36,12 @@ impl<S> Layer<S> for IdLayer<S> {
     type Service = IdMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        IdMiddleware {
-            id: Id(Uuid::new_v4()),
-            inner,
-        }
+        IdMiddleware { inner }
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct IdMiddleware<S> {
-    id: Id,
     inner: S,
 }
 
@@ -57,9 +59,10 @@ where
     }
 
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        req.extensions_mut().insert(self.id.clone());
+        let id = Id::default();
 
-        let id = self.id.clone();
+        req.extensions_mut().insert(id.clone());
+
         let res = self.inner.call(req);
 
         Box::pin(async move {
