@@ -1,0 +1,35 @@
+name: zero2prod
+
+region: lon
+
+services:
+  - name: zero2prod
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    dockerfile_path: Dockerfile
+    source_dir: .
+    http_port: 8000
+
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${newsletter.DATABASE_URL}
+
+    github:
+      repo: connec/zero2prod
+      branch: deploy
+      deploy_on_push: true
+
+    health_check:
+      http_path: /health
+
+    routes:
+      - path: /
+
+databases:
+  - engine: PG
+    version: '12'
+    size: db-s-dev-database
+    num_nodes: 1
+    name: newsletter

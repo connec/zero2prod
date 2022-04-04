@@ -1,6 +1,10 @@
 FROM rust:1.59.0-alpine AS chef
-WORKDIR app
-RUN apk add --no-cache libc-dev && cargo install cargo-chef
+WORKDIR /app
+RUN apk add --no-cache git libc-dev \
+  # Work around for a weird bug in DO app platform, which for some reason always fails when cargo
+  # tries to init this repo. It's not clear if the digest will ever change though.
+  && git config --global init.defaultBranch main && git init /usr/local/cargo/registry/index/github.com-1ecc6299db9ec823 \
+  && cargo install cargo-chef
 
 
 FROM chef AS planner
