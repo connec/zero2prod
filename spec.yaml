@@ -18,7 +18,7 @@ services:
 
     github:
       repo: connec/zero2prod
-      branch: deploy
+      branch: main
       deploy_on_push: true
 
     health_check:
