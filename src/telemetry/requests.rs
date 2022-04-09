@@ -142,7 +142,7 @@ impl ClassifyResponse for Classifier {
 
         match self.fallback.classify_response(response) {
             ClassifiedResponse::Ready(res) => {
-                ClassifiedResponse::Ready(res.map_err(|error| Error(error.to_string())))
+                ClassifiedResponse::Ready(res.map_err(|error| Error::Internal(error.to_string())))
             }
             // `NeverClassifyEos` values cannot exist (it uses `Infallible` internally)
             ClassifiedResponse::RequiresEos(_) => unreachable!(),
@@ -153,6 +153,6 @@ impl ClassifyResponse for Classifier {
     where
         E: std::fmt::Display + 'static,
     {
-        Error(error.to_string())
+        Error::Internal(error.to_string())
     }
 }
