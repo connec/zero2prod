@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use sqlx::postgres::PgPoolOptions;
 use tracing::{info, info_span};
+use zero2prod::EmailClient;
 
 #[tokio::main]
 async fn main() -> zero2prod::ServerResult {
@@ -23,7 +24,14 @@ async fn main() -> zero2prod::ServerResult {
         info!("Finished migrations");
     }
 
-    let server = zero2prod::bind(pool, &config.addr());
+    let email_client = EmailClient::new(
+        config.email_base_url().clone(),
+        config.email_sender().clone(),
+        config.email_authorization_token().to_owned(),
+        config.email_send_timeout(),
+    );
+
+    let server = zero2prod::bind(pool, email_client, &config.addr());
 
     info!("Listening on {}", server.local_addr());
 

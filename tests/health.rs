@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 
-use zero2prod::Config;
+use zero2prod::{Config, EmailClient};
 
 #[tokio::test]
 async fn health_works() {
@@ -106,10 +106,22 @@ async fn spawn_app() -> TestApp {
         }
     });
 
-    let config = Config::from_env().expect("failed to load configuration");
+    let env = std::env::vars().chain([
+        ("email_base_url".to_string(), "http://test".to_string()),
+        ("email_sender".to_string(), "test@test.test".to_string()),
+        ("email_authorization_token".to_string(), "foo".to_string()),
+        ("email_send_timeout_ms".to_string(), "200".to_string()),
+    ]);
+    let config = Config::from_iter(env).expect("failed to load configuration");
     let pool = prepare_db(&config).await;
+    let email_client = EmailClient::new(
+        config.email_base_url().clone(),
+        config.email_sender().clone(),
+        config.email_authorization_token().to_owned(),
+        config.email_send_timeout(),
+    );
 
-    let server = zero2prod::bind(pool.clone(), &(Ipv4Addr::LOCALHOST, 0).into());
+    let server = zero2prod::bind(pool.clone(), email_client, &(Ipv4Addr::LOCALHOST, 0).into());
     let addr = server.local_addr();
 
     tokio::spawn(server);

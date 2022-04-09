@@ -1,5 +1,6 @@
 mod config;
 mod domain;
+mod email_client;
 mod routes;
 mod server;
 pub mod telemetry;
@@ -13,6 +14,7 @@ use axum::{
 
 pub use self::{
     config::Config,
+    email_client::EmailClient,
     server::{bind, Server, ServerResult},
 };
 
