@@ -1,7 +1,9 @@
 use std::net::{Ipv4Addr, SocketAddr};
 
+use axum::http::StatusCode;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
+
 use zero2prod::Config;
 
 #[tokio::test]
@@ -33,7 +35,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .await
         .expect("failed to execute request");
 
-    assert_eq!(200, response.status().as_u16());
+    assert_status("valid", StatusCode::OK, response).await;
     let saved = sqlx::query!("SELECT email, name FROM subscriptions")
         .fetch_one(&app.pool)
         .await
@@ -43,7 +45,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 }
 
 #[tokio::test]
-async fn subscribe_returns_a_400_when_data_is_missing() {
+async fn subscribe_returns_a_422_when_data_is_missing() {
     let app = spawn_app().await;
     let client = reqwest::Client::new();
     let bodies = vec![
@@ -61,13 +63,30 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
             .await
             .expect("failed to execute request");
 
-        assert_eq!(
-            422,
-            response.status().as_u16(),
-            "did not get 422 Unprocessable Entity when the payload was {problem}
-got: {:?}",
-            response.text().await,
-        );
+        assert_status(problem, StatusCode::UNPROCESSABLE_ENTITY, response).await;
+    }
+}
+
+#[tokio::test]
+async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
+    let app = spawn_app().await;
+    let client = reqwest::Client::new();
+    let bodies = vec![
+        ("empty name", "name=&email=ursula_le_guin%40gmail.com"),
+        ("empty email", "name=Ursula&email="),
+        ("invalid email", "name=Ursula&email=definitely-not-an-email"),
+    ];
+
+    for (problem, body) in bodies {
+        let response = client
+            .post(format!("http://{}/subscriptions", app.addr))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("failed to execute request");
+
+        assert_status(problem, StatusCode::UNPROCESSABLE_ENTITY, response).await;
     }
 }
 
@@ -119,4 +138,16 @@ async fn prepare_db(config: &Config) -> PgPool {
         .expect("failed to migrate the database");
 
     pool
+}
+
+async fn assert_status(problem: &str, expected: StatusCode, response: reqwest::Response) {
+    assert_eq!(
+        expected,
+        response.status(),
+        "did not get {} when the payload was {problem}
+got {}: {:?}",
+        expected,
+        response.status(),
+        response.text().await,
+    );
 }
