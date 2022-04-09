@@ -1,7 +1,7 @@
 use super::Error;
 
-#[derive(Debug)]
-pub(crate) struct SubscriberEmail(String);
+#[derive(Clone, Debug)]
+pub struct SubscriberEmail(String);
 
 impl SubscriberEmail {
     pub(crate) fn parse(s: String) -> Result<Self, Error> {
