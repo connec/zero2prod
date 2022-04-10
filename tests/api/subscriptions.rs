@@ -1,10 +1,10 @@
 use axum::http::StatusCode;
 
-use crate::helpers::spawn_app;
+use crate::helpers::TestApp;
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
-    let app = spawn_app().await;
+    let app = TestApp::spawn().await;
     let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
@@ -27,7 +27,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
 #[tokio::test]
 async fn subscribe_returns_a_422_when_data_is_missing() {
-    let app = spawn_app().await;
+    let app = TestApp::spawn().await;
     let client = reqwest::Client::new();
     let bodies = vec![
         ("missing the email", "name=le%20guin"),
@@ -50,7 +50,7 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
 
 #[tokio::test]
 async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
-    let app = spawn_app().await;
+    let app = TestApp::spawn().await;
     let client = reqwest::Client::new();
     let bodies = vec![
         ("empty name", "name=&email=ursula_le_guin%40gmail.com"),

@@ -10,40 +10,42 @@ pub(crate) struct TestApp {
     pub(crate) addr: SocketAddr,
 }
 
-pub(crate) async fn spawn_app() -> TestApp {
-    TRACING_ENABLED.call_once(|| {
-        if std::env::var("TEST_LOG").is_ok() {
-            zero2prod::telemetry::init("test", std::io::stdout);
-        } else {
-            zero2prod::telemetry::init("test", std::io::sink);
-        }
-    });
+impl TestApp {
+    pub(crate) async fn spawn() -> Self {
+        TRACING_ENABLED.call_once(|| {
+            if std::env::var("TEST_LOG").is_ok() {
+                zero2prod::telemetry::init("test", std::io::stdout);
+            } else {
+                zero2prod::telemetry::init("test", std::io::sink);
+            }
+        });
 
-    let config = zero2prod::Config::builder()
-        .address((Ipv4Addr::LOCALHOST, 0).into())
-        .email_base_url("http://test".parse().unwrap())
-        .email_sender("test@test.test".parse().unwrap())
-        .email_authorization_token("foo".to_string())
-        .email_send_timeout(std::time::Duration::from_millis(200))
-        .build()
-        .expect("failed to builder configuration");
+        let config = zero2prod::Config::builder()
+            .address((Ipv4Addr::LOCALHOST, 0).into())
+            .email_base_url("http://test".parse().unwrap())
+            .email_sender("test@test.test".parse().unwrap())
+            .email_authorization_token("foo".to_string())
+            .email_send_timeout(std::time::Duration::from_millis(200))
+            .build()
+            .expect("failed to builder configuration");
 
-    // Create a unique test database
-    let database = Uuid::new_v4().to_string();
-    create_database(&config.database_options().database("postgres"), &database)
-        .await
-        .expect("failed to create test database");
+        // Create a unique test database
+        let database = Uuid::new_v4().to_string();
+        create_database(&config.database_options().database("postgres"), &database)
+            .await
+            .expect("failed to create test database");
 
-    // Set up the app
-    let app = zero2prod::App::new(config.with_database(&database));
-    let pool = app.pool().clone();
-    let server = app.serve().await.expect("failed to serve app");
-    let addr = server.local_addr();
+        // Set up the app
+        let app = zero2prod::App::new(config.with_database(&database));
+        let pool = app.pool().clone();
+        let server = app.serve().await.expect("failed to serve app");
+        let addr = server.local_addr();
 
-    // Run the server in a background task
-    tokio::spawn(server);
+        // Run the server in a background task
+        tokio::spawn(server);
 
-    TestApp { pool, addr }
+        Self { pool, addr }
+    }
 }
 
 async fn create_database(
