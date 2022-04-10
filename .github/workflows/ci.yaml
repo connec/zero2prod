@@ -8,21 +8,26 @@ env:
   SQLX_FEATURES: '["postgres", "sqlx/runtime-tokio-rustls"]'
 
 jobs:
-  test:
+  cache-sqlx-cli:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+      - name: Calculate cache parameters
+        id: params
+        run: |
+          echo '::set-output name=key::${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}-v2'
+          echo '::set-output name=path::"~/.cargo/bin/cargo-sqlx\n~/.cargo/bin/sqlx"'
       - name: Cache sqlx-cli
         uses: actions/cache@v2
         id: cache-sqlx
         with:
-          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}
-          path: ~/.cargo/bin/sqlx
+          key: ${{ steps.params.outputs.key }}
+          path: ${{ fromJSON(steps.params.outputs.path) }}
+      - uses: actions-rs/toolchain@v1
+        if: steps.cache-sqlx.outputs.cache-hit == false
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
       - name: Install sqlx-cli
         if: steps.cache-sqlx.outputs.cache-hit == false
         uses: actions-rs/cargo@v1
@@ -35,6 +40,25 @@ jobs:
             --features=${{ join(fromJSON(env.SQLX_FEATURES), ',') }}
             --no-default-features
             --locked
+    outputs:
+      key: ${{ steps.params.outputs.key }}
+      path: ${{ fromJSON(steps.params.outputs.path) }}
+
+  test:
+    runs-on: ubuntu-latest
+    needs: cache-sqlx-cli
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Cache sqlx-cli
+        uses: actions/cache@v2
+        with:
+          key: ${{ needs.cache-sqlx-cli.outputs.key }}
+          path: ${{ needs.cache-sqlx-cli.outputs.path }}
       - name: Start database
         run: ./scripts/init_db.sh >> $GITHUB_ENV
       - uses: actions-rs/cargo@v1
@@ -58,6 +82,7 @@ jobs:
 
   clippy:
     runs-on: ubuntu-latest
+    needs: cache-sqlx-cli
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -68,24 +93,9 @@ jobs:
           components: clippy
       - name: Cache sqlx-cli
         uses: actions/cache@v2
-        id: cache-sqlx
         with:
-          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}-v1
-          path: |
-            ~/.cargo/bin/cargo-sqlx
-            ~/.cargo/bin/sqlx
-      - name: Install sqlx-cli
-        if: steps.cache-sqlx.outputs.cache-hit == false
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: >
-            sqlx-cli
-            --force
-            --version=${{ env.SQLX_VERSION }}
-            --features=${{ join(fromJSON(env.SQLX_FEATURES), ',') }}
-            --no-default-features
-            --locked
+          key: ${{ needs.cache-sqlx-cli.outputs.key }}
+          path: ${{ needs.cache-sqlx-cli.outputs.path }}
       - name: Start database
         run: ./scripts/init_db.sh >> $GITHUB_ENV
       - name: Check schema sync
@@ -101,6 +111,7 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    needs: cache-sqlx-cli
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -112,20 +123,8 @@ jobs:
         uses: actions/cache@v2
         id: cache-sqlx
         with:
-          key: ${{ runner.os }}-sqlx-${{ env.SQLX_VERSION }}-${{ join(fromJSON(env.SQLX_FEATURES), '-') }}
-          path: ~/.cargo/bin/sqlx
-      - name: Install sqlx-cli
-        if: steps.cache-sqlx.outputs.cache-hit == false
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: >
-            sqlx-cli
-            --force
-            --version=${{ env.SQLX_VERSION }}
-            --features=${{ join(fromJSON(env.SQLX_FEATURES), ',') }}
-            --no-default-features
-            --locked
+          key: ${{ needs.cache-sqlx-cli.outputs.key }}
+          path: ${{ needs.cache-sqlx-cli.outputs.path }}
       - name: Start database
         run: ./scripts/init_db.sh >> $GITHUB_ENV
       - uses: actions-rs/tarpaulin@v0.1
