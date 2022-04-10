@@ -1,114 +1,138 @@
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
+use std::{net::SocketAddr, time::Duration};
 
 use reqwest::Url;
 use sqlx::postgres::PgConnectOptions;
 
 use crate::domain::SubscriberEmail;
 
-const DEFAULT_ADDRESS: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-const DEFAULT_PORT: u16 = 8000;
-
-#[derive(serde::Deserialize)]
 pub struct Config {
-    #[serde(default, deserialize_with = "ip_addr_from_str")]
-    address: Option<IpAddr>,
-
-    #[serde(default)]
-    port: Option<u16>,
-
-    #[serde(rename = "database_url", deserialize_with = "database_url_from_str")]
-    database: PgConnectOptions,
-
-    email_base_url: Url,
-
-    #[serde(deserialize_with = "subscriber_email_from_string")]
-    email_sender: SubscriberEmail,
-
-    email_authorization_token: String,
-
-    #[serde(rename = "email_send_timeout_ms", deserialize_with = "duration_ms")]
-    email_send_timeout: Duration,
+    pub(crate) address: SocketAddr,
+    pub(crate) database_options: PgConnectOptions,
+    pub(crate) email_base_url: Url,
+    pub(crate) email_sender: SubscriberEmail,
+    pub(crate) email_authorization_token: String,
+    pub(crate) email_send_timeout: Duration,
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, envy::Error> {
-        envy::from_env()
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_iter<I>(iter: I) -> Result<Self, envy::Error>
-    where
-        I: IntoIterator<Item = (String, String)>,
-    {
-        envy::from_iter(iter)
-    }
-
-    pub fn addr(&self) -> SocketAddr {
-        SocketAddr::from((
-            self.address.unwrap_or(DEFAULT_ADDRESS),
-            self.port.unwrap_or(DEFAULT_PORT),
-        ))
+    pub fn builder() -> ConfigBuilder {
+        ConfigBuilder::default()
     }
 
     pub fn database_options(&self) -> PgConnectOptions {
-        self.database.clone()
+        self.database_options.clone()
     }
 
     pub fn with_database(mut self, database: &str) -> Self {
-        self.database = self.database.database(database);
+        self.database_options = self.database_options.database(database);
+        self
+    }
+}
+
+#[derive(Default, serde::Deserialize)]
+pub struct ConfigBuilder {
+    #[serde(default, deserialize_with = "parse_optional")]
+    address: Option<SocketAddr>,
+
+    #[serde(default, rename = "database_url", deserialize_with = "parse_optional")]
+    database_options: Option<PgConnectOptions>,
+
+    #[serde(default, deserialize_with = "parse_optional")]
+    email_base_url: Option<Url>,
+
+    #[serde(default, deserialize_with = "parse_optional")]
+    email_sender: Option<SubscriberEmail>,
+
+    #[serde(default)]
+    email_authorization_token: Option<String>,
+
+    #[serde(
+        default,
+        rename = "email_send_timeout_ms",
+        deserialize_with = "parse_millis_optional"
+    )]
+    email_send_timeout: Option<Duration>,
+}
+
+impl ConfigBuilder {
+    pub fn address(mut self, address: SocketAddr) -> Self {
+        self.address = Some(address);
         self
     }
 
-    pub fn email_base_url(&self) -> &Url {
-        &self.email_base_url
+    pub fn database_options(mut self, database_options: PgConnectOptions) -> Self {
+        self.database_options = Some(database_options);
+        self
     }
 
-    pub fn email_sender(&self) -> &SubscriberEmail {
-        &self.email_sender
+    pub fn email_base_url(mut self, email_base_url: Url) -> Self {
+        self.email_base_url = Some(email_base_url);
+        self
     }
 
-    pub fn email_authorization_token(&self) -> &str {
-        &self.email_authorization_token
+    pub fn email_sender(mut self, email_sender: SubscriberEmail) -> Self {
+        self.email_sender = Some(email_sender);
+        self
     }
 
-    pub fn email_send_timeout(&self) -> Duration {
-        self.email_send_timeout
+    pub fn email_authorization_token(mut self, email_authorization_token: String) -> Self {
+        self.email_authorization_token = Some(email_authorization_token);
+        self
+    }
+
+    pub fn email_send_timeout(mut self, email_send_timeout: Duration) -> Self {
+        self.email_send_timeout = Some(email_send_timeout);
+        self
+    }
+
+    pub fn build(self) -> Result<Config, envy::Error> {
+        // Get any overrides from the environment
+        let overrides: Self = envy::from_env()?;
+
+        Ok(Config {
+            address: self
+                .address
+                .or(overrides.address)
+                .ok_or(envy::Error::MissingValue("address"))?,
+            database_options: self
+                .database_options
+                .or(overrides.database_options)
+                .ok_or(envy::Error::MissingValue("database_url"))?,
+            email_base_url: self
+                .email_base_url
+                .or(overrides.email_base_url)
+                .ok_or(envy::Error::MissingValue("email_base_url"))?,
+            email_sender: self
+                .email_sender
+                .or(overrides.email_sender)
+                .ok_or(envy::Error::MissingValue("email_sender"))?,
+            email_authorization_token: self
+                .email_authorization_token
+                .or(overrides.email_authorization_token)
+                .ok_or(envy::Error::MissingValue("email_authorization_token"))?,
+            email_send_timeout: self
+                .email_send_timeout
+                .or(overrides.email_send_timeout)
+                .ok_or(envy::Error::MissingValue("email_send_timeout_ms"))?,
+        })
     }
 }
 
-fn ip_addr_from_str<'de, D>(deserializer: D) -> Result<Option<IpAddr>, D::Error>
+fn parse_optional<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
 {
-    let ip_addr: Option<String> = serde::Deserialize::deserialize(deserializer)?;
-    ip_addr
-        .map(|ip_addr| ip_addr.parse().map_err(serde::de::Error::custom))
+    let s: Option<String> = serde::Deserialize::deserialize(deserializer)?;
+    s.map(|s| s.parse().map_err(serde::de::Error::custom))
         .transpose()
 }
 
-fn database_url_from_str<'de, D>(deserializer: D) -> Result<PgConnectOptions, D::Error>
+fn parse_millis_optional<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let database_url: String = serde::Deserialize::deserialize(deserializer)?;
-    database_url.parse().map_err(serde::de::Error::custom)
-}
-
-fn subscriber_email_from_string<'de, D>(deserializer: D) -> Result<SubscriberEmail, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let email: String = serde::Deserialize::deserialize(deserializer)?;
-    SubscriberEmail::parse(email).map_err(serde::de::Error::custom)
-}
-
-fn duration_ms<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let millis: u64 = serde::Deserialize::deserialize(deserializer)?;
-    Ok(Duration::from_millis(millis))
+    let millis: Option<u64> = serde::Deserialize::deserialize(deserializer)?;
+    Ok(millis.map(Duration::from_millis))
 }

@@ -21,16 +21,16 @@ pub type Server =
     axum::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<axum::Router>>;
 
 impl App {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: Config) -> Self {
         let pool = PgPoolOptions::new()
             .connect_timeout(Duration::from_secs(2))
             .connect_lazy_with(config.database_options());
 
         let email_client = EmailClient::new(
-            config.email_base_url().clone(),
-            config.email_sender().clone(),
-            config.email_authorization_token().to_owned(),
-            config.email_send_timeout(),
+            config.email_base_url,
+            config.email_sender,
+            config.email_authorization_token,
+            config.email_send_timeout,
         );
 
         let service = routes()
@@ -44,7 +44,7 @@ impl App {
             .into_make_service();
 
         Self {
-            addr: config.addr(),
+            addr: config.address,
             pool,
             service,
         }

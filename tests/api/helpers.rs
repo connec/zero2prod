@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 
 use sqlx::{Connection as _, Executor as _};
 use uuid::Uuid;
@@ -19,15 +19,14 @@ pub(crate) async fn spawn_app() -> TestApp {
         }
     });
 
-    let env = std::env::vars().chain([
-        ("address".to_string(), "127.0.0.1".to_string()),
-        ("port".to_string(), "0".to_string()),
-        ("email_base_url".to_string(), "http://test".to_string()),
-        ("email_sender".to_string(), "test@test.test".to_string()),
-        ("email_authorization_token".to_string(), "foo".to_string()),
-        ("email_send_timeout_ms".to_string(), "200".to_string()),
-    ]);
-    let config = zero2prod::Config::from_iter(env).expect("failed to load configuration");
+    let config = zero2prod::Config::builder()
+        .address((Ipv4Addr::LOCALHOST, 0).into())
+        .email_base_url("http://test".parse().unwrap())
+        .email_sender("test@test.test".parse().unwrap())
+        .email_authorization_token("foo".to_string())
+        .email_send_timeout(std::time::Duration::from_millis(200))
+        .build()
+        .expect("failed to builder configuration");
 
     // Create a unique test database
     let database = Uuid::new_v4().to_string();
@@ -36,7 +35,7 @@ pub(crate) async fn spawn_app() -> TestApp {
         .expect("failed to create test database");
 
     // Set up the app
-    let app = zero2prod::App::new(&config.with_database(&database));
+    let app = zero2prod::App::new(config.with_database(&database));
     let pool = app.pool().clone();
     let server = app.serve().await.expect("failed to serve app");
     let addr = server.local_addr();

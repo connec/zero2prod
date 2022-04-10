@@ -179,7 +179,8 @@ mod tests {
     }
 
     fn email() -> SubscriberEmail {
-        SubscriberEmail::parse(SafeEmail().fake()).unwrap()
+        let email: String = SafeEmail().fake();
+        SubscriberEmail::parse(email).unwrap()
     }
 
     fn email_client(base_url: String) -> EmailClient {
