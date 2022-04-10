@@ -90,29 +90,29 @@ impl ConfigBuilder {
         let overrides: Self = envy::from_env()?;
 
         Ok(Config {
-            address: self
+            address: overrides
                 .address
-                .or(overrides.address)
+                .or(self.address)
                 .ok_or(envy::Error::MissingValue("address"))?,
-            database_options: self
+            database_options: overrides
                 .database_options
-                .or(overrides.database_options)
+                .or(self.database_options)
                 .ok_or(envy::Error::MissingValue("database_url"))?,
-            email_base_url: self
+            email_base_url: overrides
                 .email_base_url
-                .or(overrides.email_base_url)
+                .or(self.email_base_url)
                 .ok_or(envy::Error::MissingValue("email_base_url"))?,
-            email_sender: self
+            email_sender: overrides
                 .email_sender
-                .or(overrides.email_sender)
+                .or(self.email_sender)
                 .ok_or(envy::Error::MissingValue("email_sender"))?,
-            email_authorization_token: self
+            email_authorization_token: overrides
                 .email_authorization_token
-                .or(overrides.email_authorization_token)
+                .or(self.email_authorization_token)
                 .ok_or(envy::Error::MissingValue("email_authorization_token"))?,
-            email_send_timeout: self
+            email_send_timeout: overrides
                 .email_send_timeout
-                .or(overrides.email_send_timeout)
+                .or(self.email_send_timeout)
                 .ok_or(envy::Error::MissingValue("email_send_timeout_ms"))?,
         })
     }
