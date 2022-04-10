@@ -130,3 +130,39 @@ jobs:
       - uses: actions-rs/tarpaulin@v0.1
         with:
           args: --ignore-tests
+
+  migration-compatibility:
+    runs-on: ubuntu-latest
+    needs: cache-sqlx-cli
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.base_ref }}
+      - name: Checkout new migrations
+        run: |
+          git fetch --depth=1 origin ${{ github.sha }}:${{ github.ref }}
+          git checkout ${{ github.sha }} -- migrations/
+      - uses: tj-actions/changed-files@v18.7
+        id: changed-files
+        with:
+          files: migrations/
+      - uses: actions-rs/toolchain@v1
+        if: steps.changed-files.outputs.any_changed
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Cache sqlx-cli
+        if: steps.changed-files.outputs.any_changed
+        uses: actions/cache@v2
+        id: cache-sqlx
+        with:
+          key: ${{ needs.cache-sqlx-cli.outputs.key }}
+          path: ${{ needs.cache-sqlx-cli.outputs.path }}
+      - name: Start database
+        if: steps.changed-files.outputs.any_changed
+        run: ./scripts/init_db.sh >> $GITHUB_ENV
+      - uses: actions-rs/cargo@v1
+        if: steps.changed-files.outputs.any_changed
+        with:
+          command: test
