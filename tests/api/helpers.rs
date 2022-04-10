@@ -1,5 +1,6 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::Ipv4Addr;
 
+use reqwest::Url;
 use sqlx::{Connection as _, Executor as _};
 use uuid::Uuid;
 
@@ -7,7 +8,7 @@ static TRACING_ENABLED: std::sync::Once = std::sync::Once::new();
 
 pub(crate) struct TestApp {
     pub(crate) pool: sqlx::PgPool,
-    pub(crate) addr: SocketAddr,
+    pub(crate) base_url: Url,
 }
 
 impl TestApp {
@@ -44,7 +45,20 @@ impl TestApp {
         // Run the server in a background task
         tokio::spawn(server);
 
-        Self { pool, addr }
+        Self {
+            pool,
+            base_url: format!("http://{}/", addr).parse().unwrap(),
+        }
+    }
+
+    pub(crate) async fn post_subscriptions(&self, body: impl Into<String>) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(self.base_url.join("/subscriptions").unwrap())
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(body.into())
+            .send()
+            .await
+            .expect("failed to execute request")
     }
 }
 

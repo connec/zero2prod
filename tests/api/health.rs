@@ -6,7 +6,7 @@ async fn health_works() {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(format!("http://{}/health", app.addr))
+        .get(app.base_url.join("/health").unwrap())
         .send()
         .await
         .expect("failed to execute request");
