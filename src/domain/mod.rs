@@ -19,6 +19,6 @@ impl fmt::Display for Error {
 
 impl From<Error> for crate::Error {
     fn from(error: Error) -> Self {
-        Self::Validation(error.0)
+        Self::Validation(error.to_string())
     }
 }

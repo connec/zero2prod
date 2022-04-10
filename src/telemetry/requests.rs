@@ -1,19 +1,15 @@
-use std::{convert::Infallible, fmt, marker::PhantomData, task, time::Duration};
+use std::{convert::Infallible, fmt, marker::PhantomData, sync::Arc, task, time::Duration};
 
 use axum::{body::Body, http::Request, response::Response};
+use eyre::Report;
 use futures::future::BoxFuture;
 use tower::{Layer, Service};
 use tower_http::{
-    classify::{
-        ClassifiedResponse, ClassifyResponse, NeverClassifyEos, ServerErrorsAsFailures,
-        SharedClassifier,
-    },
+    classify::{ClassifiedResponse, ClassifyResponse, NeverClassifyEos, SharedClassifier},
     trace::{DefaultOnBodyChunk, DefaultOnEos, TraceLayer},
 };
 use tracing::Span;
 use uuid::Uuid;
-
-use crate::Error;
 
 #[derive(Clone)]
 pub(crate) struct Id(Uuid);
@@ -86,7 +82,7 @@ pub(crate) fn trace_layer() -> TraceLayer<
     impl FnOnce(&Response, Duration, &Span) + Clone,
     DefaultOnBodyChunk,
     DefaultOnEos,
-    impl FnMut(Error, Duration, &Span) + Clone,
+    impl FnMut(Arc<Report>, Duration, &Span) + Clone,
 > {
     TraceLayer::new(SharedClassifier::new(Classifier::default()))
         .make_span_with(|request: &Request<Body>| {
@@ -113,9 +109,9 @@ pub(crate) fn trace_layer() -> TraceLayer<
                 "finished processing request",
             )
         })
-        .on_failure(|error: Error, latency: Duration, _span: &Span| {
+        .on_failure(|error: Arc<Report>, latency: Duration, _span: &Span| {
             tracing::error!(
-                %error,
+                error = ?error.as_ref(),
                 latency = %format_args!("{}ms", latency.as_millis()),
                 "error processing request",
             );
@@ -123,29 +119,23 @@ pub(crate) fn trace_layer() -> TraceLayer<
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct Classifier {
-    fallback: ServerErrorsAsFailures,
-}
+pub(crate) struct Classifier;
 
 impl ClassifyResponse for Classifier {
-    type FailureClass = Error;
+    type FailureClass = Arc<Report>;
     type ClassifyEos = NeverClassifyEos<Self::FailureClass>;
 
     fn classify_response<B>(
         self,
         response: &Response<B>,
     ) -> ClassifiedResponse<Self::FailureClass, Self::ClassifyEos> {
-        let error: Option<&Error> = response.extensions().get();
+        let error: Option<&Arc<Report>> = response.extensions().get();
         if let Some(error) = error {
-            return ClassifiedResponse::Ready(Err(error.clone()));
-        }
-
-        match self.fallback.classify_response(response) {
-            ClassifiedResponse::Ready(res) => {
-                ClassifiedResponse::Ready(res.map_err(|error| Error::Internal(error.to_string())))
-            }
-            // `NeverClassifyEos` values cannot exist (it uses `Infallible` internally)
-            ClassifiedResponse::RequiresEos(_) => unreachable!(),
+            ClassifiedResponse::Ready(Err(error.clone()))
+        } else if response.status().is_server_error() {
+            ClassifiedResponse::Ready(Err(Arc::new(Report::msg("error not recorded"))))
+        } else {
+            ClassifiedResponse::Ready(Ok(()))
         }
     }
 
@@ -153,6 +143,6 @@ impl ClassifyResponse for Classifier {
     where
         E: std::fmt::Display + 'static,
     {
-        Error::Internal(error.to_string())
+        Arc::new(Report::msg(error.to_string()))
     }
 }
