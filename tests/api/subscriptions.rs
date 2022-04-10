@@ -5,16 +5,9 @@ use crate::helpers::TestApp;
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = TestApp::spawn().await;
-    let client = reqwest::Client::new();
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    let response = client
-        .post(format!("http://{}/subscriptions", app.addr))
-        .header("content-type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .expect("failed to execute request");
+    let response = app.post_subscriptions(body).await;
 
     assert_status("valid", StatusCode::OK, response).await;
     let saved = sqlx::query!("SELECT email, name FROM subscriptions")
@@ -28,7 +21,6 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 #[tokio::test]
 async fn subscribe_returns_a_422_when_data_is_missing() {
     let app = TestApp::spawn().await;
-    let client = reqwest::Client::new();
     let bodies = vec![
         ("missing the email", "name=le%20guin"),
         ("missing the name", "email=ursula_le_guin%40gmail.com"),
@@ -36,14 +28,7 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
     ];
 
     for (problem, body) in bodies {
-        let response = client
-            .post(format!("http://{}/subscriptions", app.addr))
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .expect("failed to execute request");
-
+        let response = app.post_subscriptions(body).await;
         assert_status(problem, StatusCode::UNPROCESSABLE_ENTITY, response).await;
     }
 }
@@ -51,7 +36,6 @@ async fn subscribe_returns_a_422_when_data_is_missing() {
 #[tokio::test]
 async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
     let app = TestApp::spawn().await;
-    let client = reqwest::Client::new();
     let bodies = vec![
         ("empty name", "name=&email=ursula_le_guin%40gmail.com"),
         ("empty email", "name=Ursula&email="),
@@ -59,13 +43,7 @@ async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
     ];
 
     for (problem, body) in bodies {
-        let response = client
-            .post(format!("http://{}/subscriptions", app.addr))
-            .header("content-type", "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .expect("failed to execute request");
+        let response = app.post_subscriptions(body).await;
 
         assert_status(problem, StatusCode::UNPROCESSABLE_ENTITY, response).await;
     }
