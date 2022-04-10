@@ -1,25 +1,6 @@
-use std::net::{Ipv4Addr, SocketAddr};
-
 use axum::http::StatusCode;
-use sqlx::{Connection, Executor, PgConnection, PgPool};
-use uuid::Uuid;
 
-use zero2prod::{Config, EmailClient};
-
-#[tokio::test]
-async fn health_works() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-
-    let response = client
-        .get(format!("http://{}/health", app.addr))
-        .send()
-        .await
-        .expect("failed to execute request");
-
-    assert!(response.status().is_success());
-    assert_eq!(Some(0), response.content_length());
-}
+use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
@@ -88,68 +69,6 @@ async fn subscribe_returns_a_422_when_fields_are_present_but_invalid() {
 
         assert_status(problem, StatusCode::UNPROCESSABLE_ENTITY, response).await;
     }
-}
-
-static TRACING_ENABLED: std::sync::Once = std::sync::Once::new();
-
-struct TestApp {
-    pool: PgPool,
-    addr: SocketAddr,
-}
-
-async fn spawn_app() -> TestApp {
-    TRACING_ENABLED.call_once(|| {
-        if std::env::var("TEST_LOG").is_ok() {
-            zero2prod::telemetry::init("test", std::io::stdout);
-        } else {
-            zero2prod::telemetry::init("test", std::io::sink);
-        }
-    });
-
-    let env = std::env::vars().chain([
-        ("email_base_url".to_string(), "http://test".to_string()),
-        ("email_sender".to_string(), "test@test.test".to_string()),
-        ("email_authorization_token".to_string(), "foo".to_string()),
-        ("email_send_timeout_ms".to_string(), "200".to_string()),
-    ]);
-    let config = Config::from_iter(env).expect("failed to load configuration");
-    let pool = prepare_db(&config).await;
-    let email_client = EmailClient::new(
-        config.email_base_url().clone(),
-        config.email_sender().clone(),
-        config.email_authorization_token().to_owned(),
-        config.email_send_timeout(),
-    );
-
-    let server = zero2prod::bind(pool.clone(), email_client, &(Ipv4Addr::LOCALHOST, 0).into());
-    let addr = server.local_addr();
-
-    tokio::spawn(server);
-
-    TestApp { pool, addr }
-}
-
-async fn prepare_db(config: &Config) -> PgPool {
-    let mut connection =
-        PgConnection::connect_with(&config.database_options_with_database("postgres"))
-            .await
-            .expect("failed to connect to `postgres` database");
-
-    let database = Uuid::new_v4().to_string();
-    connection
-        .execute(format!(r#"CREATE DATABASE "{}""#, database).as_str())
-        .await
-        .expect("failed to create database");
-
-    let pool = PgPool::connect_with(config.database_options_with_database(&database))
-        .await
-        .expect("failed to connect to test database");
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await
-        .expect("failed to migrate the database");
-
-    pool
 }
 
 async fn assert_status(problem: &str, expected: StatusCode, response: reqwest::Response) {
