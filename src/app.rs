@@ -2,6 +2,7 @@ use std::{net::SocketAddr, time::Duration};
 
 use axum::routing::{get, post};
 use sqlx::postgres::PgPoolOptions;
+use tracing::warn;
 
 use crate::{email_client::EmailClient, routes, telemetry, Config, Error};
 
@@ -14,6 +15,7 @@ fn routes() -> axum::Router {
 pub struct App {
     addr: SocketAddr,
     pool: sqlx::PgPool,
+    ignore_missing_migrations: bool,
     service: axum::routing::IntoMakeService<axum::Router>,
 }
 
@@ -46,6 +48,7 @@ impl App {
         Self {
             addr: config.address,
             pool,
+            ignore_missing_migrations: config.ignore_missing_migrations,
             service,
         }
     }
@@ -55,7 +58,17 @@ impl App {
     }
 
     pub async fn serve(self) -> Result<Server, sqlx::migrate::MigrateError> {
-        self.migrate().await?;
+        self.migrate().await.or_else(|error| match error {
+            sqlx::migrate::MigrateError::VersionMissing(_) if self.ignore_missing_migrations => {
+                warn!(
+                    ?error,
+                    "database state is ahead of that known by the app – \
+                    in a rollback scenario this is expected, but otherwise something may be wrong"
+                );
+                Ok(())
+            }
+            _ => Err(error),
+        })?;
         Ok(axum::Server::bind(&self.addr).serve(self.service))
     }
 
