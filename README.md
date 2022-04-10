@@ -47,7 +47,10 @@ The application is designed to be compatible with a rolling deployment strategy,
 The server itself is stateless, however it of course depends on a single database which is used by all running instances, old and new.
 
 Migrations are run when the server is started, which means the database is migrated as soon as a single instance of the new app has been started.
-Additionally, if the new instance is unhealthy, further instances may not be rolled out.
-Thus, it's critical that migrations preserve compatibility with the existing application (e.g. no removing in-use fields, no new fields without defaults, no incompatible changes to column types, etc.). Conversely, it's not necessary for new versions of the app to be compatible with the old schema (database rollbacks are not supported).
-
+Thus, it's critical that migrations preserve compatibility with the existing application (e.g. no removing in-use fields, no new fields without defaults, no incompatible changes to column types, etc.).
 To help ensure this, there's a CI check that runs the test suite from `main` with the migrations from `HEAD`.
+
+Furthermore, if a new deployment is unhealthy after running migrations, further instances may not be rolled out and new instances of the *old* deployment may be started instead.
+It's therefore also necessary that instances can start when unknown migrations have been applied (e.g. the database state is ahead of the version known to the instance), so "missing version" errors from sqlx are ignored on startup.
+
+Conversely, it's not necessary for new versions of the app to be compatible with the old schema (database rollbacks are not supported).

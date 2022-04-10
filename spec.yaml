@@ -15,6 +15,10 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: ${newsletter.DATABASE_URL}
+      - key: IGNORE_MISSING_MIGRATIONS
+        scope: RUN_TIME
+        type: GENERAL
+        value: 'true'
 
     github:
       repo: connec/zero2prod
