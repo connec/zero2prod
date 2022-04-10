@@ -11,7 +11,7 @@ axum-sqlx-tx = { version = "0.3.0", features = ["postgres"] }
 envy = "0.4.2"
 futures = "0.3.21"
 hyper = "0.14.18"
-reqwest = { version = "0.11.10", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.11.10", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0.136", features = ["derive"] }
 sqlx = { version = "0.5.11", features = ["macros", "migrate", "offline", "postgres", "runtime-tokio-rustls", "time", "uuid"], default-features = false }
 time = "0.2.27"
