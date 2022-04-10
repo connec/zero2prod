@@ -1,8 +1,8 @@
+mod app;
 mod config;
 mod domain;
 mod email_client;
 mod routes;
-mod server;
 pub mod telemetry;
 
 use std::fmt;
@@ -13,9 +13,9 @@ use axum::{
 };
 
 pub use self::{
+    app::{App, Server},
     config::Config,
     email_client::EmailClient,
-    server::{bind, Server, ServerResult},
 };
 
 pub(crate) type Tx = axum_sqlx_tx::Tx<sqlx::Postgres, Error>;

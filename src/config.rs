@@ -57,8 +57,9 @@ impl Config {
         self.database.clone()
     }
 
-    pub fn database_options_with_database(&self, name: &str) -> PgConnectOptions {
-        self.database.clone().database(name)
+    pub fn with_database(mut self, database: &str) -> Self {
+        self.database = self.database.database(database);
+        self
     }
 
     pub fn email_base_url(&self) -> &Url {
