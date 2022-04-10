@@ -39,4 +39,15 @@ Explicitly out of scope:
   The middleware also sets the request ID in a response header, so it could potentially be shown to clients on errors to give a correlation ID for debugging without exposing internal errors or logging PII.
 
 - An alpine-based image is used.
-  This gives significantly lighter images (~10MiB), although there were some hiccups getting it working in DigitalOcean App Platform (see the comment in the [`Dockerfile`](Dockerfile)).
+  This gives significantly lighter images (\~10MiB), although there were some hiccups getting it working in DigitalOcean App Platform (see the comment in the [`Dockerfile`](Dockerfile)).
+
+## Deployment compatibility
+
+The application is designed to be compatible with a rolling deployment strategy, during which there may be both old and new replicas running concurrently.
+The server itself is stateless, however it of course depends on a single database which is used by all running instances, old and new.
+
+Migrations are run when the server is started, which means the database is migrated as soon as a single instance of the new app has been started.
+Additionally, if the new instance is unhealthy, further instances may not be rolled out.
+Thus, it's critical that migrations preserve compatibility with the existing application (e.g. no removing in-use fields, no new fields without defaults, no incompatible changes to column types, etc.). Conversely, it's not necessary for new versions of the app to be compatible with the old schema (database rollbacks are not supported).
+
+To help ensure this, there's a CI check that runs the test suite from `main` with the migrations from `HEAD`.
