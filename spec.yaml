@@ -11,6 +11,10 @@ services:
     http_port: 8000
 
     envs:
+      - key: ADDRESS
+        scope: RUN_TIME
+        type: GENERAL
+        value: 0.0.0.0:8000
       - key: DATABASE_URL
         scope: RUN_TIME
         type: SECRET

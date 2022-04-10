@@ -26,5 +26,4 @@ FROM scratch AS runtime
 
 WORKDIR /app
 COPY --from=builder /app/target/release/zero2prod zero2prod
-ENV ADDRESS 0.0.0.0
 ENTRYPOINT ["/app/zero2prod"]
