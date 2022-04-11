@@ -21,12 +21,28 @@ services:
         value: ${APP_URL}
       - key: DATABASE_URL
         scope: RUN_TIME
-        type: SECRET
+        type: GENERAL
         value: ${newsletter.DATABASE_URL}
       - key: IGNORE_MISSING_MIGRATIONS
         scope: RUN_TIME
         type: GENERAL
         value: 'true'
+      - key: EMAIL_BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: https://api.postmarkapp.com/
+      - key: EMAIL_SENDER
+        scope: RUN_TIME
+        type: GENERAL
+        value: chris@connec.co.uk
+      - key: EMAIL_AUTHORIZATION_TOKEN
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${EMAIL_AUTHORIZATION_TOKEN}
+      - key: EMAIL_SEND_TIMEOUT_MS
+        scope: RUN_TIME
+        type: GENERAL
+        value: '2000'
 
     github:
       repo: connec/zero2prod
