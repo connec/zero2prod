@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
 use axum::routing::{get, post};
+use reqwest::Url;
 use sqlx::postgres::PgPoolOptions;
 use tracing::warn;
 
@@ -10,6 +11,7 @@ fn routes() -> axum::Router {
     axum::Router::new()
         .route("/health", get(routes::health))
         .route("/subscriptions", post(routes::subscribe))
+        .route("/subscriptions/confirm", get(routes::confirm))
 }
 
 pub struct App {
@@ -21,6 +23,17 @@ pub struct App {
 
 pub type Server =
     axum::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<axum::Router>>;
+
+#[derive(Clone)]
+pub struct AppBaseUrl(Url);
+
+impl std::ops::Deref for AppBaseUrl {
+    type Target = Url;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl App {
     pub fn new(config: Config) -> Self {
@@ -41,6 +54,7 @@ impl App {
                     .layer(telemetry::id_layer())
                     .layer(telemetry::trace_layer())
                     .layer(axum_sqlx_tx::Layer::new_with_error::<Error>(pool.clone()))
+                    .layer(axum::Extension(AppBaseUrl(config.base_url)))
                     .layer(axum::Extension(email_client)),
             )
             .into_make_service();

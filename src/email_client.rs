@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{sync::Arc, time::Duration};
+use std::{fmt, sync::Arc, time::Duration};
 
 use reqwest::Url;
 
@@ -41,7 +41,7 @@ impl EmailClient {
         subject: &str,
         html_content: &str,
         text_content: &str,
-    ) -> Result<(), reqwest::Error> {
+    ) -> Result<(), Error> {
         let inner = &self.inner;
 
         let url = inner.base_url.join("/email").unwrap();
@@ -73,6 +73,33 @@ struct SendEmailRequest<'a> {
     subject: &'a str,
     text_body: &'a str,
     html_body: &'a str,
+}
+
+#[derive(Debug)]
+pub(crate) struct Error(reqwest::Error);
+
+impl From<reqwest::Error> for Error {
+    fn from(error: reqwest::Error) -> Self {
+        Self(error)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "an error occurred when sending an email")
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+impl From<Error> for crate::Error {
+    fn from(error: Error) -> Self {
+        crate::Error::Internal(error.into())
+    }
 }
 
 #[cfg(test)]

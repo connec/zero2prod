@@ -7,6 +7,7 @@ use crate::domain::SubscriberEmail;
 
 pub struct Config {
     pub(crate) address: SocketAddr,
+    pub(crate) base_url: Url,
     pub(crate) database_options: PgConnectOptions,
     pub(crate) ignore_missing_migrations: bool,
     pub(crate) email_base_url: Url,
@@ -35,6 +36,9 @@ pub struct ConfigBuilder {
     #[serde(default, deserialize_with = "parse_optional")]
     address: Option<SocketAddr>,
 
+    #[serde(default, deserialize_with = "parse_optional")]
+    base_url: Option<Url>,
+
     #[serde(default, rename = "database_url", deserialize_with = "parse_optional")]
     database_options: Option<PgConnectOptions>,
 
@@ -62,6 +66,7 @@ impl ConfigBuilder {
     fn empty() -> Self {
         Self {
             address: None,
+            base_url: None,
             database_options: None,
             ignore_missing_migrations: None,
             email_base_url: None,
@@ -73,18 +78,18 @@ impl ConfigBuilder {
 
     fn default() -> Self {
         Self {
-            address: None,
-            database_options: None,
             ignore_missing_migrations: Some(false),
-            email_base_url: None,
-            email_sender: None,
-            email_authorization_token: None,
-            email_send_timeout: None,
+            ..Self::empty()
         }
     }
 
     pub fn address(mut self, address: SocketAddr) -> Self {
         self.address = Some(address);
+        self
+    }
+
+    pub fn base_url(mut self, base_url: Url) -> Self {
+        self.base_url = Some(base_url);
         self
     }
 
@@ -131,6 +136,11 @@ impl ConfigBuilder {
                 .or(self.address)
                 .or(default.address)
                 .ok_or(envy::Error::MissingValue("address"))?,
+            base_url: overrides
+                .base_url
+                .or(self.base_url)
+                .or(default.base_url)
+                .ok_or(envy::Error::MissingValue("base_url"))?,
             database_options: overrides
                 .database_options
                 .or(self.database_options)

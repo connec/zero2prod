@@ -13,7 +13,7 @@ use axum::{
 };
 
 pub use self::{
-    app::{App, Server},
+    app::{App, AppBaseUrl, Server},
     config::Config,
     email_client::EmailClient,
 };

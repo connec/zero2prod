@@ -1,9 +1,71 @@
 {
   "db": "PostgreSQL",
-  "bcfcfebc6f5e8ffbf97d97c5a209be78b46d703924482cf8b43842705fcb7714": {
+  "2f536b16a1a631ea442f4ff838070f9b192f1f0f566733873f74de3925a75490": {
     "describe": {
       "columns": [],
       "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n        UPDATE subscriptions\n        SET status = $1\n        WHERE subscriptions.id = $2\n        "
+  },
+  "355cacfbe5c01d62ab98f7c20cb888170e1960477482a167246625c3c1a63b61": {
+    "describe": {
+      "columns": [
+        {
+          "name": "subscriber_id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "SELECT subscriber_id FROM subscription_tokens WHERE id = $1"
+  },
+  "3a7882dc2b0d64b599e75ece3a16470d7a865e35cf9392433c4a3ca05da5b0e7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\n        INSERT INTO subscription_tokens (id, subscriber_id)\n        VALUES ($1, $2)\n        RETURNING id\n        "
+  },
+  "4e814f697c91bfcb9c9614aa6285f872bb292f0f12fee6273b1c1916cc2f188c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        }
+      ],
+      "nullable": [
+        false
+      ],
       "parameters": {
         "Left": [
           "Uuid",
@@ -13,6 +75,6 @@
         ]
       }
     },
-    "query": "\n        INSERT INTO subscriptions (id, email, name, subscribed_at)\n        VALUES ($1, $2, $3, $4)\n        "
+    "query": "\n        INSERT INTO subscriptions (id, email, name, subscribed_at)\n        VALUES ($1, $2, $3, $4)\n        RETURNING id\n        "
   }
 }
