@@ -9,13 +9,24 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v3
-      - uses: digitalocean/action-doctl@v2
+      - uses: actions/setup-go@v3
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          go-version: '1.17'
+      - name: Checkout doctl fork
+        uses: actions/checkout@v3
+        with:
+          repository: connec/doctl
+          ref: fix-apps-update-wait
+          path: doctl
+      - name: Install doctl fork
+        run: cd doctl && go install ./...
+      - uses: actions/checkout@v3
+        with:
+          path: app
       - name: Update app
-        run: scripts/update-app.sh
+        run: cd app && scripts/update-app.sh
         env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_AUTHORIZATION_TOKEN: ${{ secrets.EMAIL_AUTHORIZATION_TOKEN }}
