@@ -3,12 +3,15 @@ use std::net::Ipv4Addr;
 use reqwest::Url;
 use sqlx::{Connection as _, Executor as _};
 use uuid::Uuid;
+use wiremock::MockServer;
 
 static TRACING_ENABLED: std::sync::Once = std::sync::Once::new();
 
 pub(crate) struct TestApp {
+    pub(crate) port: u16,
     pub(crate) pool: sqlx::PgPool,
     pub(crate) base_url: Url,
+    pub(crate) email_server: MockServer,
 }
 
 impl TestApp {
@@ -21,9 +24,13 @@ impl TestApp {
             }
         });
 
+        let email_server = MockServer::start().await;
+
         let config = zero2prod::Config::builder()
             .address((Ipv4Addr::LOCALHOST, 0).into())
-            .email_base_url("http://test".parse().unwrap())
+            // FIXME: we don't know what address to use 😭
+            .base_url("http://127.0.0.1:0".parse().unwrap())
+            .email_base_url(email_server.uri().parse().unwrap())
             .email_sender("test@test.test".parse().unwrap())
             .email_authorization_token("foo".to_string())
             .email_send_timeout(std::time::Duration::from_millis(200))
@@ -46,8 +53,10 @@ impl TestApp {
         tokio::spawn(server);
 
         Self {
+            port: addr.port(),
             pool,
             base_url: format!("http://{}/", addr).parse().unwrap(),
+            email_server,
         }
     }
 
@@ -60,6 +69,35 @@ impl TestApp {
             .await
             .expect("failed to execute request")
     }
+
+    pub(crate) fn get_confirmation_links(&self, request: &wiremock::Request) -> ConfirmationLinks {
+        let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+
+        let get_link = |s| {
+            let links: Vec<_> = linkify::LinkFinder::new()
+                .links(s)
+                .filter(|link| link.kind() == &linkify::LinkKind::Url)
+                .collect();
+            assert_eq!(links.len(), 1);
+
+            let mut link: Url = links[0].as_str().parse().unwrap();
+            assert_eq!(link.host_str().unwrap(), Ipv4Addr::LOCALHOST.to_string());
+
+            // FIXME: we should ideally inject the correct port into base_url somehow
+            link.set_port(Some(self.port)).unwrap();
+
+            link
+        };
+
+        let html = get_link(body["HtmlBody"].as_str().unwrap());
+        let text = get_link(body["HtmlBody"].as_str().unwrap());
+        ConfirmationLinks { html, text }
+    }
+}
+
+pub(crate) struct ConfirmationLinks {
+    pub(crate) html: Url,
+    pub(crate) text: Url,
 }
 
 async fn create_database(

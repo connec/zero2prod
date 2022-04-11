@@ -1,10 +1,14 @@
 mod new_subscriber;
 mod subscriber_email;
 mod subscriber_name;
+mod subscriber_status;
 
 use std::fmt;
 
-pub(crate) use self::{new_subscriber::NewSubscriber, subscriber_name::SubscriberName};
+pub(crate) use self::{
+    new_subscriber::NewSubscriber, subscriber_name::SubscriberName,
+    subscriber_status::SubscriberStatus,
+};
 
 pub use self::subscriber_email::SubscriberEmail;
 

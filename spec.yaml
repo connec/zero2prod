@@ -15,6 +15,10 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: 0.0.0.0:8000
+      - key: BASE_URL
+        scope: RUN_TIME
+        type: GENERAL
+        value: ${APP_URL}
       - key: DATABASE_URL
         scope: RUN_TIME
         type: SECRET
