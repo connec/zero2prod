@@ -34,11 +34,11 @@ services:
       - key: EMAIL_SENDER
         scope: RUN_TIME
         type: GENERAL
-        value: chris@connec.co.uk
+        value: {{EMAIL_SENDER}}
       - key: EMAIL_AUTHORIZATION_TOKEN
         scope: RUN_TIME
-        type: GENERAL
-        value: ${EMAIL_AUTHORIZATION_TOKEN}
+        type: SECRET
+        value: {{EMAIL_AUTHORIZATION_TOKEN}}
       - key: EMAIL_SEND_TIMEOUT_MS
         scope: RUN_TIME
         type: GENERAL

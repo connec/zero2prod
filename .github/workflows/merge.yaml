@@ -1,0 +1,21 @@
+name: Merge
+
+on:
+  push:
+    branches: fix-config
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v3
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+      - name: Update app
+        run: scripts/update-app.sh
+        env:
+          APP_ID: ${{ secrets.DIGITALOCEAN_APP_ID }}
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_AUTHORIZATION_TOKEN: ${{ secrets.EMAIL_AUTHORIZATION_TOKEN }}
