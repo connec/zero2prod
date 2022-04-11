@@ -2,7 +2,7 @@ name: Merge
 
 on:
   push:
-    branches: fix-config
+    branches: main
 
 jobs:
   deploy:
