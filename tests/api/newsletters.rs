@@ -57,7 +57,7 @@ async fn invalid_password_is_rejected() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
         response.headers()["WWW-Authenticate"],
-        "Basic realm=\"publish\""
+        "Basic realm=\"zero2prod\""
     );
 }
 
