@@ -1,10 +1,65 @@
 use axum::http::StatusCode;
+use uuid::Uuid;
 use wiremock::{
     matchers::{any, method, path},
     Mock, ResponseTemplate,
 };
 
 use crate::helpers::{ConfirmationLinks, TestApp};
+
+#[tokio::test]
+async fn requests_missing_authorization_are_rejected() {
+    let app = TestApp::spawn().await;
+
+    let response = reqwest::Client::new()
+        .post(app.base_url.join("/newsletters").unwrap())
+        .json(&serde_json::json!({
+            "title": "Newsletter title",
+            "content": {
+                "text": "Newsletter body as plain text",
+                "html": "<p>Newsletter body as HTML</p>",
+            },
+        }))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers()["WWW-Authenticate"],
+        "Basic realm=\"publish\""
+    );
+}
+
+#[tokio::test]
+async fn invalid_password_is_rejected() {
+    let app = TestApp::spawn().await;
+    let password = Uuid::new_v4().to_string();
+    assert_ne!(
+        app.test_user.password, password,
+        "generated the same UUID twice!"
+    );
+
+    let response = reqwest::Client::new()
+        .post(app.base_url.join("/newsletters").unwrap())
+        .basic_auth(&app.test_user.username, Some(&password))
+        .json(&serde_json::json!({
+            "title": "Newsletter title",
+            "content": {
+                "text": "Newsletter body as plain text",
+                "html": "<p>Newsletter body as HTML</p>",
+            },
+        }))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers()["WWW-Authenticate"],
+        "Basic realm=\"publish\""
+    );
+}
 
 #[tokio::test]
 async fn newsletters_are_not_delivered_to_unconfirmed_subscribers() {

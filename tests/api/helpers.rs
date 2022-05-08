@@ -1,5 +1,6 @@
 use std::{env, net::Ipv4Addr};
 
+use argon2::{password_hash::SaltString, Argon2, Params, PasswordHasher};
 use reqwest::Url;
 use sqlx::{Connection as _, Executor as _};
 use uuid::Uuid;
@@ -12,6 +13,7 @@ pub(crate) struct TestApp {
     pub(crate) pool: sqlx::PgPool,
     pub(crate) base_url: Url,
     pub(crate) email_server: MockServer,
+    pub(crate) test_user: TestUser,
 }
 
 impl TestApp {
@@ -53,11 +55,15 @@ impl TestApp {
         // Run the server in a background task
         tokio::spawn(server);
 
+        let test_user = TestUser::generate();
+        test_user.store(&pool).await;
+
         Self {
             port: addr.port(),
             pool,
             base_url: format!("http://{}/", addr).parse().unwrap(),
             email_server,
+            test_user,
         }
     }
 
@@ -74,6 +80,7 @@ impl TestApp {
     pub(crate) async fn post_newsletters(&self, body: &serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
             .post(self.base_url.join("/newsletters").unwrap())
+            .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(body)
             .send()
             .await
@@ -102,6 +109,43 @@ impl TestApp {
         let html = get_link(body["HtmlBody"].as_str().unwrap());
         let text = get_link(body["HtmlBody"].as_str().unwrap());
         ConfirmationLinks { html, text }
+    }
+}
+
+pub(crate) struct TestUser {
+    pub(crate) id: Uuid,
+    pub(crate) username: String,
+    pub(crate) password: String,
+}
+
+impl TestUser {
+    pub(crate) fn generate() -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            username: Uuid::new_v4().to_string(),
+            password: Uuid::new_v4().to_string(),
+        }
+    }
+
+    async fn store(&self, pool: &sqlx::PgPool) {
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::V0x13,
+            Params::new(15_000, 2, 1, None).unwrap(),
+        )
+        .hash_password(self.password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
+        sqlx::query!(
+            "INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)",
+            self.id,
+            self.username,
+            password_hash
+        )
+        .execute(pool)
+        .await
+        .expect("failed to store test user");
     }
 }
 

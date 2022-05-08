@@ -1,12 +1,13 @@
 use std::{fmt, sync::Arc};
 
 use axum::{
-    http::StatusCode,
+    http::{header::WWW_AUTHENTICATE, StatusCode},
     response::{IntoResponse, Response},
 };
 
 #[derive(Debug)]
 pub(crate) enum Error {
+    Unauthorized(String),
     Validation(String),
     Internal(eyre::Report),
 }
@@ -14,8 +15,9 @@ pub(crate) enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Error::Validation(error) => write!(f, "{}", error),
-            Error::Internal(error) => write!(f, "{}", error),
+            Self::Unauthorized(realm) => write!(f, "unauthorized for realm {}", realm),
+            Self::Validation(error) => write!(f, "{}", error),
+            Self::Internal(error) => write!(f, "{}", error),
         }
     }
 }
@@ -41,6 +43,11 @@ impl From<eyre::Report> for Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
+            Self::Unauthorized(realm) => (
+                StatusCode::UNAUTHORIZED,
+                [(WWW_AUTHENTICATE, format!("Basic realm=\"{}\"", realm))],
+            )
+                .into_response(),
             Self::Validation(error) => (StatusCode::UNPROCESSABLE_ENTITY, error).into_response(),
             Self::Internal(error) => {
                 let mut response = StatusCode::INTERNAL_SERVER_ERROR.into_response();
