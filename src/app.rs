@@ -9,7 +9,9 @@ use crate::{email_client::EmailClient, routes, telemetry, Config, Error};
 
 fn routes() -> axum::Router {
     axum::Router::new()
+        .route("/", get(routes::home))
         .route("/health", get(routes::health))
+        .route("/login", get(routes::login_form).post(routes::login))
         .route("/newsletters", post(routes::publish_newsletter))
         .route("/subscriptions", post(routes::subscribe))
         .route("/subscriptions/confirm", get(routes::confirm))
