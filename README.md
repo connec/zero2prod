@@ -11,7 +11,7 @@ Per the user stories:
   > So that I can receive email updates when new content is published on the blog;
 
 - > As the blog author,<br>
-  > I want to send an email to all my subscribers,<br>
+  > I want to send an email to all my confirmed subscribers,<br>
   > So that I can notify them when new content is published;
 
 - > As a subscriber,<br>
