@@ -7,8 +7,10 @@ use zero2prod::App;
 async fn main() {
     zero2prod::telemetry::init(env!("CARGO_PKG_NAME"), std::io::stdout);
 
+    let address = (Ipv4Addr::LOCALHOST, 8000).into();
     let config = zero2prod::Config::builder()
-        .address((Ipv4Addr::LOCALHOST, 8000).into())
+        .address(address)
+        .base_url(format!("http://{}/", address).parse().unwrap())
         .merge_env()
         .expect("invalid configuration in environment")
         .build()
