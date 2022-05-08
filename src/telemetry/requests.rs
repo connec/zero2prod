@@ -112,6 +112,7 @@ pub(crate) fn trace_layer() -> TraceLayer<
         .on_failure(|error: Arc<Report>, latency: Duration, _span: &Span| {
             tracing::error!(
                 error = ?error.as_ref(),
+                error_detail = %format!("{:#?}", error.as_ref().chain().next().unwrap()),
                 latency = %format_args!("{}ms", latency.as_millis()),
                 "error processing request",
             );

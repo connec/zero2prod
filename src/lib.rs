@@ -47,6 +47,12 @@ impl From<axum_sqlx_tx::Error> for Error {
     }
 }
 
+impl From<eyre::Report> for Error {
+    fn from(error: eyre::Report) -> Self {
+        Self::Internal(error)
+    }
+}
+
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {

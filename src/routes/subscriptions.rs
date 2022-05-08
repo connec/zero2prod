@@ -1,4 +1,5 @@
 use axum::{extract::Form, http::StatusCode, Extension};
+use eyre::Context;
 use reqwest::Url;
 use time::OffsetDateTime;
 use uuid::Uuid;
@@ -34,9 +35,17 @@ pub(crate) async fn subscribe(
 ) -> Result<StatusCode, Error> {
     let subscriber = form.try_into()?;
 
-    let subscriber_id = insert_subscriber(&mut tx, &subscriber).await?;
-    let token = insert_subscription_token(&mut tx, &subscriber_id).await?;
-    send_confirmation_email(&base_url, &email_client, subscriber, &token).await?;
+    let subscriber_id = insert_subscriber(&mut tx, &subscriber)
+        .await
+        .context("failed to persist subscriber")?;
+
+    let token = insert_subscription_token(&mut tx, &subscriber_id)
+        .await
+        .context("failed to persist subscription token")?;
+
+    send_confirmation_email(&base_url, &email_client, subscriber, &token)
+        .await
+        .context("failed to send confirmation email")?;
 
     Ok(StatusCode::OK)
 }

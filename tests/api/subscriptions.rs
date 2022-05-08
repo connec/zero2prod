@@ -148,6 +148,22 @@ async fn the_link_returned_by_subscribe_confirms_a_subscriber() {
     assert_eq!(saved.status, "confirmed");
 }
 
+#[tokio::test]
+async fn subscribe_fails_if_there_is_a_fatal_database_error() {
+    let app = TestApp::spawn().await;
+    let body = "name=le%20guin&email=ursula_le_guin@gmail.com";
+
+    // Sabotage the database
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscriber_id")
+        .execute(&app.pool)
+        .await
+        .unwrap();
+
+    let response = app.post_subscriptions(body).await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
 async fn assert_status(problem: &str, expected: StatusCode, response: reqwest::Response) {
     assert_eq!(
         expected,

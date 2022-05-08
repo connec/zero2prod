@@ -1,16 +1,22 @@
 use axum::{extract::Query, http::StatusCode};
+use eyre::Context;
 use uuid::Uuid;
 
 use crate::{domain::SubscriberStatus, Error, Tx};
 
 #[tracing::instrument(skip_all)]
 pub(crate) async fn confirm(mut tx: Tx, params: Query<Params>) -> Result<StatusCode, Error> {
-    let subscriber_id = match get_subscriber_id(&mut tx, &params.token).await? {
+    let subscriber_id = get_subscriber_id(&mut tx, &params.token)
+        .await
+        .context("failed to retrieve subscriber ID")?;
+    let subscriber_id = match subscriber_id {
         None => return Ok(StatusCode::UNAUTHORIZED),
         Some(id) => id,
     };
 
-    confirm_subscription(&mut tx, &subscriber_id).await?;
+    confirm_subscription(&mut tx, &subscriber_id)
+        .await
+        .context("failed to persist subscription confirmation")?;
 
     Ok(StatusCode::OK)
 }
