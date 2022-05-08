@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::{env, net::Ipv4Addr};
 
 use reqwest::Url;
 use sqlx::{Connection as _, Executor as _};
@@ -30,6 +30,7 @@ impl TestApp {
             .address((Ipv4Addr::LOCALHOST, 0).into())
             // FIXME: we don't know what address to use 😭
             .base_url("http://127.0.0.1:0".parse().unwrap())
+            .database_options(env::var("DATABASE_URL").unwrap().parse().unwrap())
             .email_base_url(email_server.uri().parse().unwrap())
             .email_sender("test@test.test".parse().unwrap())
             .email_authorization_token("foo".to_string())

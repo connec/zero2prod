@@ -9,6 +9,8 @@ async fn main() {
 
     let config = zero2prod::Config::builder()
         .address((Ipv4Addr::LOCALHOST, 8000).into())
+        .merge_env()
+        .expect("invalid configuration in environment")
         .build()
         .expect("failed to read configuration");
 
