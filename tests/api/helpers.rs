@@ -1,6 +1,7 @@
 use std::{env, net::Ipv4Addr};
 
 use argon2::{password_hash::SaltString, Argon2, Params, PasswordHasher};
+use axum_extra::extract::cookie;
 use reqwest::Url;
 use sqlx::{Connection as _, Executor as _};
 use uuid::Uuid;
@@ -13,6 +14,7 @@ pub(crate) struct TestApp {
     pub(crate) pool: sqlx::PgPool,
     pub(crate) base_url: Url,
     pub(crate) email_server: MockServer,
+    pub(crate) api_client: reqwest::Client,
     pub(crate) test_user: TestUser,
 }
 
@@ -32,11 +34,13 @@ impl TestApp {
             .address((Ipv4Addr::LOCALHOST, 0).into())
             // FIXME: we don't know what address to use 😭
             .base_url("http://127.0.0.1:0".parse().unwrap())
+            .cookie_key(cookie::Key::generate())
             .database_options(env::var("DATABASE_URL").unwrap().parse().unwrap())
             .email_base_url(email_server.uri().parse().unwrap())
             .email_sender("test@test.test".parse().unwrap())
             .email_authorization_token("foo".to_string())
             .email_send_timeout(std::time::Duration::from_millis(200))
+            .redis_url(env::var("REDIS_URL").unwrap().parse().unwrap())
             .build()
             .expect("failed to builder configuration");
 
@@ -55,6 +59,12 @@ impl TestApp {
         // Run the server in a background task
         tokio::spawn(server);
 
+        let api_client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .cookie_store(true)
+            .build()
+            .unwrap();
+
         let test_user = TestUser::generate();
         test_user.store(&pool).await;
 
@@ -63,12 +73,47 @@ impl TestApp {
             pool,
             base_url: format!("http://{}/", addr).parse().unwrap(),
             email_server,
+            api_client,
             test_user,
         }
     }
 
+    pub(crate) async fn get_login(&self) -> String {
+        self.api_client
+            .get(self.base_url.join("/login").unwrap())
+            .send()
+            .await
+            .expect("failed to execute request")
+            .text()
+            .await
+            .unwrap()
+    }
+
+    pub(crate) async fn get_admin_dashboard(&self) -> String {
+        self.api_client
+            .get(self.base_url.join("/admin/dashboard").unwrap())
+            .send()
+            .await
+            .expect("failed to execute request")
+            .text()
+            .await
+            .unwrap()
+    }
+
+    pub(crate) async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(self.base_url.join("/login").unwrap())
+            .form(body)
+            .send()
+            .await
+            .expect("failed to execute request")
+    }
+
     pub(crate) async fn post_subscriptions(&self, body: impl Into<String>) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(self.base_url.join("/subscriptions").unwrap())
             .header("content-type", "application/x-www-form-urlencoded")
             .body(body.into())
@@ -78,7 +123,7 @@ impl TestApp {
     }
 
     pub(crate) async fn post_newsletters(&self, body: &serde_json::Value) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(self.base_url.join("/newsletters").unwrap())
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(body)

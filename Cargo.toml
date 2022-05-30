@@ -8,12 +8,15 @@ edition = "2021"
 [dependencies]
 argon2 = { version = "0.4.0", features = ["std"] }
 axum = { version = "0.5.0", features = ["headers"] }
+axum-extra = { version = "0.3.0", features = ["cookie-signed"] }
 axum-sqlx-tx = { version = "0.3.0", features = ["postgres"] }
+base64 = "0.13.0"
 envy = "0.4.2"
 eyre = "0.6.8"
 futures = "0.3.21"
 hyper = "0.14.18"
 rand = "0.8.5"
+redis = { git = "https://github.com/LeoRowan/redis-rs", branch = "rustls", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 reqwest = { version = "0.11.10", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0.136", features = ["derive"] }
 sqlx = { version = "0.5.11", features = ["macros", "migrate", "offline", "postgres", "runtime-tokio-rustls", "time", "uuid"], default-features = false }
@@ -37,5 +40,6 @@ fake = "~2.3"
 linkify = "0.8.0"
 quickcheck = "0.9"
 quickcheck_macros = "0.9"
+reqwest = { version = "0.11.10", default-features = false, features = ["cookies", "json", "rustls-tls"] }
 serde_json = "1.0.79"
 wiremock = "0.5.12"

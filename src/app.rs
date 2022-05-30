@@ -10,6 +10,7 @@ use crate::{email_client::EmailClient, routes, telemetry, Config, Error};
 fn routes() -> axum::Router {
     axum::Router::new()
         .route("/", get(routes::home))
+        .route("/admin/dashboard", get(routes::admin_dashboard))
         .route("/health", get(routes::health))
         .route("/login", get(routes::login_form).post(routes::login))
         .route("/newsletters", post(routes::publish_newsletter))
@@ -44,6 +45,9 @@ impl App {
             .connect_timeout(Duration::from_secs(2))
             .connect_lazy_with(config.database_options());
 
+        let session_client =
+            redis::Client::open(config.redis_url).expect("could not connect to Redis");
+
         let email_client = EmailClient::new(
             config.email_base_url,
             config.email_sender,
@@ -56,9 +60,13 @@ impl App {
                 tower::ServiceBuilder::new()
                     .layer(telemetry::id_layer())
                     .layer(telemetry::trace_layer())
-                    .layer(axum_sqlx_tx::Layer::new_with_error::<Error>(pool.clone()))
                     .layer(axum::Extension(AppBaseUrl(config.base_url)))
-                    .layer(axum::Extension(email_client)),
+                    .layer(axum::Extension(config.cookie_key))
+                    .layer(axum::Extension(email_client))
+                    // TODO: These could be combined into a layer (or maybe an axum-session library)
+                    .layer(axum::Extension(session_client))
+                    .layer(axum::middleware::from_fn(crate::auth::session_middleware))
+                    .layer(axum_sqlx_tx::Layer::new_with_error::<Error>(pool.clone())),
             )
             .into_make_service();
 

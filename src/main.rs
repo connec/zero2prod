@@ -1,10 +1,11 @@
 use std::net::Ipv4Addr;
 
+use eyre::Context;
 use tracing::info;
 use zero2prod::App;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), eyre::Report> {
     zero2prod::telemetry::init(env!("CARGO_PKG_NAME"), std::io::stdout);
 
     let address = (Ipv4Addr::LOCALHOST, 8000).into();
@@ -12,13 +13,15 @@ async fn main() {
         .address(address)
         .base_url(format!("http://{}/", address).parse().unwrap())
         .merge_env()
-        .expect("invalid configuration in environment")
+        .context("invalid configuration in environment")?
         .build()
-        .expect("failed to read configuration");
+        .context("failed to read configuration")?;
 
     let app = App::new(config);
-    let server = app.serve().await.expect("failed to serve app");
+    let server = app.serve().await.context("failed to serve app")?;
 
     info!("Listening on {}", server.local_addr());
-    server.await.expect("error while running server")
+    server.await.context("error while running server")?;
+
+    Ok(())
 }

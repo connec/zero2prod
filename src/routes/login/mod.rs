@@ -1,24 +1,26 @@
 use axum::{
-    extract::{Form, Query},
+    extract::Form,
     response::{Html, Redirect},
-    Extension,
+};
+use axum_extra::extract::{cookie::Cookie, SignedCookieJar};
+use eyre::Context;
+
+use crate::{
+    auth::{self, Session},
+    Error, Tx,
 };
 
-use crate::{auth, AppBaseUrl, Error, Tx};
-
-#[derive(serde::Deserialize)]
-pub(crate) struct LoginFormParams {
-    error: Option<String>,
-}
-
 #[tracing::instrument(skip_all)]
-pub(crate) async fn login_form(params: Option<Query<LoginFormParams>>) -> Html<String> {
-    let error_html = if params.and_then(|params| params.0.error).is_some() {
-        "<p><i>Invalid username or password</i></p>"
+pub(crate) async fn login_form(cookies: SignedCookieJar) -> (SignedCookieJar, Html<String>) {
+    let error_html = if let Some(cookie) = cookies.get("_flash") {
+        format!("<p><i>{}</i></p>", cookie.value())
     } else {
-        ""
+        "".to_string()
     };
-    Html(format!(include_str!("index.html"), error_html = error_html))
+    (
+        cookies.remove(Cookie::named("_flash")),
+        Html(format!(include_str!("index.html"), error_html = error_html)),
+    )
 }
 
 #[derive(serde::Deserialize)]
@@ -39,24 +41,28 @@ impl From<Credentials> for auth::Credentials {
 #[tracing::instrument(skip_all, fields(user_id = tracing::field::Empty))]
 pub(crate) async fn login(
     mut tx: Tx,
-    Extension(base_url): Extension<AppBaseUrl>,
+    cookies: SignedCookieJar,
+    mut session: Session,
     Form(credentials): Form<Credentials>,
-) -> Result<Redirect, Error> {
-    let user_id = auth::validate_credentials(&mut tx, credentials.into())
-        .await
-        .map(Some)
-        .or_else(|error| match error {
-            auth::Error::Unauthorized => Ok(None),
-            _ => Err(error),
-        })?;
-
-    if let Some(user_id) = user_id {
-        tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-        Ok(Redirect::to("/"))
-    } else {
-        let mut url = base_url.join("/login").expect("invalid base URL");
-        url.query_pairs_mut().append_key_only("error");
-
-        Ok(Redirect::to(url.as_str()))
+) -> Result<(SignedCookieJar, Redirect), Error> {
+    match auth::validate_credentials(&mut tx, credentials.into()).await {
+        Ok(user_id) => {
+            session
+                .insert("user_id", user_id)
+                .await
+                .context("failed to store user_id in session")?;
+            tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+            Ok((cookies, Redirect::to("/admin/dashboard")))
+        }
+        Err(auth::Error::Unauthorized) => Ok((
+            cookies.add(
+                Cookie::build("_flash", "Authentication failed")
+                    .http_only(true)
+                    .secure(true)
+                    .finish(),
+            ),
+            Redirect::to("/login"),
+        )),
+        Err(error) => Err(error.into()),
     }
 }
