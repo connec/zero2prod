@@ -1,10 +1,7 @@
 use eyre::Context;
 use uuid::Uuid;
 
-use crate::{
-    auth::{Session, UserId},
-    Error, Tx,
-};
+use crate::{auth::UserId, session::Session, Error, Tx};
 
 pub(crate) async fn admin_dashboard(mut tx: Tx, mut session: Session) -> Result<String, Error> {
     let username = if let Some(user_id) = session

@@ -5,6 +5,7 @@ mod domain;
 mod email_client;
 mod error;
 mod routes;
+mod session;
 pub mod telemetry;
 
 pub use self::{

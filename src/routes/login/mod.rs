@@ -5,10 +5,7 @@ use axum::{
 use axum_extra::extract::{cookie::Cookie, SignedCookieJar};
 use eyre::Context;
 
-use crate::{
-    auth::{self, Session},
-    Error, Tx,
-};
+use crate::{auth, session::Session, Error, Tx};
 
 #[tracing::instrument(skip_all)]
 pub(crate) async fn login_form(cookies: SignedCookieJar) -> (SignedCookieJar, Html<String>) {

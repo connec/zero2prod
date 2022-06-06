@@ -65,7 +65,7 @@ impl App {
                     .layer(axum::Extension(email_client))
                     // TODO: These could be combined into a layer (or maybe an axum-session library)
                     .layer(axum::Extension(session_client))
-                    .layer(axum::middleware::from_fn(crate::auth::session_middleware))
+                    .layer(axum::middleware::from_fn(crate::session::middleware))
                     .layer(axum_sqlx_tx::Layer::new_with_error::<Error>(pool.clone())),
             )
             .into_make_service();
