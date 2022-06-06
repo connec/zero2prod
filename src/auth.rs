@@ -2,7 +2,6 @@ use std::fmt;
 
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use eyre::Context;
-use redis::{FromRedisValue, ToRedisArgs};
 use uuid::Uuid;
 
 use crate::Tx;
@@ -44,7 +43,8 @@ impl From<Error> for crate::Error {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[serde(transparent)]
 pub(crate) struct UserId(Uuid);
 
 impl std::ops::Deref for UserId {
@@ -58,29 +58,6 @@ impl std::ops::Deref for UserId {
 impl fmt::Display for UserId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl FromRedisValue for UserId {
-    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
-        if let redis::Value::Data(bytes) = v {
-            if let Ok(uuid) = Uuid::parse_str(&String::from_utf8_lossy(bytes)) {
-                Ok(Self(uuid))
-            } else {
-                Err((redis::ErrorKind::TypeError, "invalid UUID").into())
-            }
-        } else {
-            Err((redis::ErrorKind::TypeError, "wrong data type for user ID").into())
-        }
-    }
-}
-
-impl ToRedisArgs for UserId {
-    fn write_redis_args<W>(&self, out: &mut W)
-    where
-        W: ?Sized + redis::RedisWrite,
-    {
-        out.write_arg_fmt(self.0)
     }
 }
 
