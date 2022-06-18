@@ -1,128 +1,198 @@
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use axum::{
+    body::Bytes,
     extract::{FromRequest, RequestParts},
     http::Request,
+    middleware::Next,
     response::IntoResponse,
     Extension,
 };
 use axum_extra::extract::{cookie::Cookie, SignedCookieJar};
-use eyre::Context as _;
+use futures::future::BoxFuture;
 use redis::AsyncCommands as _;
 use uuid::Uuid;
 
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub(crate) struct Error(ErrorRepr);
+const SESSION_ID_COOKIE: &str = "session_id";
 
-#[derive(Debug, thiserror::Error)]
-enum ErrorRepr {
-    #[error(transparent)]
-    Redis(redis::RedisError),
-
-    #[error(transparent)]
-    Serialization(serde_json::Error),
-}
-
-impl From<redis::RedisError> for Error {
-    fn from(error: redis::RedisError) -> Self {
-        Self(ErrorRepr::Redis(error))
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(error: serde_json::Error) -> Self {
-        Self(ErrorRepr::Serialization(error))
-    }
-}
-
-pub(crate) async fn middleware<B>(
+pub(crate) async fn middleware<B: Send>(
     req: Request<B>,
-    next: axum::middleware::Next<B>,
-) -> Result<impl IntoResponse, crate::Error>
-where
-    B: Send,
-{
+    next: Next<B>,
+) -> Result<impl IntoResponse, Error> {
     let mut req = RequestParts::new(req);
 
-    let cookies: SignedCookieJar = req
-        .extract()
-        .await
-        .context("missing cookie::Key in request extensions")?;
+    let slot = SessionSlot::default();
+    req.extensions_mut().insert(slot.clone());
 
-    let (cookies, session_id) = if let Some(session_id) = cookies.get("session_id") {
-        (cookies, session_id.value().to_string())
-    } else {
-        let session_id = Uuid::new_v4().to_string();
-        (
-            cookies.add(Cookie::new("session_id", session_id.clone())),
-            session_id,
-        )
+    let Extension(client): Extension<redis::Client> =
+        req.extract().await.map_err(ErrorKind::MissingConfig)?;
+
+    let cookies: SignedCookieJar = req.extract().await.map_err(ErrorKind::MissingConfig)?;
+
+    // unwrap OK because we don't call take_body
+    let res = next.run(req.try_into_request().unwrap()).await;
+
+    let session = match slot.0.lock().unwrap().take() {
+        Some(session) => session,
+        None => return Ok((cookies, res)),
     };
 
-    let Extension(session_client): Extension<redis::Client> = req
-        .extract()
-        .await
-        .context("missing redis::Client in request extensions")?;
+    // unwrap OK because serializing to string can't fail and content is valid for serialization
+    let session_bytes = serde_json::to_string(&session.content).unwrap();
 
-    let connection = session_client
+    let mut connection = client
         .get_async_connection()
         .await
-        .context("could not connect to session store")?;
+        .map_err(ErrorKind::Redis)?;
 
-    req.extensions_mut().insert(Session {
-        connection,
-        session_id,
-    });
+    let _: () = connection
+        .set(&session.session_id.as_ref().unwrap(), session_bytes)
+        .await
+        .map_err(ErrorKind::Redis)?;
 
-    // unwrap is fine since we don't (and mustn't!) touch body above
-    let req = req.try_into_request().unwrap();
-
-    Ok((cookies, next.run(req).await))
+    Ok((
+        cookies.add(Cookie::new(SESSION_ID_COOKIE, session.session_id.unwrap())),
+        res,
+    ))
 }
 
-// TODO: eager load (?) and lazy write
-// TODO: use a typemap
+#[derive(Clone, Default)]
+struct SessionSlot(Arc<Mutex<Option<SessionFields>>>);
+
+struct SessionFields {
+    session_id: Option<String>,
+    content: HashMap<String, serde_json::Value>,
+}
+
 pub(crate) struct Session {
-    connection: redis::aio::Connection,
-    session_id: String,
+    slot: SessionSlot,
+    session_id: Option<String>,
+    content: HashMap<String, serde_json::Value>,
+    modified: bool,
 }
 
 impl Session {
-    pub(crate) async fn get<T: serde::de::DeserializeOwned>(
-        &mut self,
-        key: &str,
-    ) -> Result<Option<T>, Error> {
-        let stored: String = self.connection.hget(&self.session_id, key).await?;
-        let value = serde_json::from_str(&stored)?;
-        Ok(value)
+    pub(crate) fn get<'a, T: serde::Deserialize<'a>>(&'a self, key: &str) -> Result<T, GetError> {
+        let value = self.content.get(key).ok_or(GetError::NotFound)?;
+        T::deserialize(value).map_err(GetError::De)
     }
 
-    pub(crate) async fn insert<T: serde::Serialize + Send + Sync>(
-        &mut self,
-        key: &str,
-        value: T,
-    ) -> Result<(), Error> {
-        let stored = serde_json::to_string(&value)?;
-        self.connection.hset(&self.session_id, key, stored).await?;
-        Ok(())
+    pub(crate) fn insert<T: serde::Serialize>(&mut self, key: &str, value: &T) {
+        // unwrap because writing to a vec can't fail and we treat using a type that can't be
+        // serialized to JSON as a programming error.
+        let value = serde_json::to_value(value).unwrap();
+
+        if let Some(existing) = self.content.get_mut(key) {
+            *existing = value;
+        } else {
+            self.content.insert(key.to_owned(), value);
+        }
+
+        self.modified = true;
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.session_id = Some(Uuid::new_v4().to_string());
+        self.content.clear();
+        self.modified = true;
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        if self.modified {
+            *self.slot.0.lock().unwrap() = Some(SessionFields {
+                session_id: std::mem::take(&mut self.session_id),
+                content: std::mem::take(&mut self.content),
+            });
+        }
     }
 }
 
 impl<B: Send> FromRequest<B> for Session {
-    type Rejection = crate::Error;
+    type Rejection = Error;
 
-    fn from_request<'life0, 'async_trait>(
-        req: &'life0 mut RequestParts<B>,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self, Self::Rejection>> + Send + 'async_trait>,
-    >
+    fn from_request<'req, 'ret>(
+        req: &'req mut axum::extract::RequestParts<B>,
+    ) -> BoxFuture<'ret, Result<Self, Self::Rejection>>
     where
-        'life0: 'async_trait,
-        Self: 'async_trait,
+        'req: 'ret,
+        Self: 'ret,
     {
         Box::pin(async move {
-            req.extensions_mut()
-                .remove()
-                .ok_or_else(|| eyre::Report::msg("no Session in request extensions").into())
+            let Extension(slot): Extension<SessionSlot> =
+                req.extract().await.map_err(ErrorKind::MissingConfig)?;
+
+            let cookies: SignedCookieJar = req.extract().await.map_err(ErrorKind::MissingConfig)?;
+
+            let session_id = match cookies.get(SESSION_ID_COOKIE) {
+                Some(cookie) => cookie.value().to_owned(),
+                None => {
+                    return Ok(Session {
+                        slot,
+                        session_id: None,
+                        content: HashMap::new(),
+                        modified: false,
+                    })
+                }
+            };
+
+            let Extension(client): Extension<redis::Client> =
+                req.extract().await.map_err(ErrorKind::MissingConfig)?;
+
+            let mut connection = client
+                .get_async_connection()
+                .await
+                .map_err(ErrorKind::Redis)?;
+
+            let content_bytes: Bytes = connection
+                .get(&session_id)
+                .await
+                .map_err(ErrorKind::Redis)?;
+
+            let content =
+                serde_json::from_slice(&content_bytes).map_err(ErrorKind::InvalidContent)?;
+
+            Ok(Session {
+                slot,
+                session_id: Some(session_id),
+                content,
+                modified: false,
+            })
         })
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("unable to load session")]
+pub(crate) struct Error(#[from] ErrorKind);
+
+impl IntoResponse for Error {
+    fn into_response(self) -> axum::response::Response {
+        crate::Error::Internal(self.into()).into_response()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+enum ErrorKind {
+    #[error(transparent)]
+    MissingConfig(axum::extract::rejection::ExtensionRejection),
+
+    #[error(transparent)]
+    Redis(redis::RedisError),
+
+    #[error(transparent)]
+    InvalidContent(serde_json::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum GetError {
+    #[error("field does not exist in session")]
+    NotFound,
+
+    #[error("field could not be deserialized")]
+    De(serde_json::Error),
 }

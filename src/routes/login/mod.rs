@@ -44,10 +44,8 @@ pub(crate) async fn login(
 ) -> Result<(SignedCookieJar, Redirect), Error> {
     match auth::validate_credentials(&mut tx, credentials.into()).await {
         Ok(user_id) => {
-            session
-                .insert("user_id", user_id)
-                .await
-                .context("failed to store user_id in session")?;
+            session.reset();
+            session.insert("user_id", &user_id);
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
             Ok((cookies, Redirect::to("/admin/dashboard")))
         }

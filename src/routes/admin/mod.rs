@@ -3,11 +3,10 @@ use uuid::Uuid;
 
 use crate::{auth::UserId, session::Session, Error, Tx};
 
-pub(crate) async fn admin_dashboard(mut tx: Tx, mut session: Session) -> Result<String, Error> {
-    let username = if let Some(user_id) = session
+pub(crate) async fn admin_dashboard(mut tx: Tx, session: Session) -> Result<String, Error> {
+    let username = if let Ok(user_id) = session
         .get::<UserId>("user_id")
-        .await
-        .context("failed to retrieve user_id from session")?
+        .context("failed to retrieve user_id from session")
     {
         get_username(&mut tx, *user_id).await?
     } else {
